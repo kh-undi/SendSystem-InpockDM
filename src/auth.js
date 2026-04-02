@@ -26,8 +26,6 @@ async function login(page, account) {
     return true;
   } catch (error) {
     console.error(`${tag} [로그인 실패] ${error.message}`);
-    const screenshotPath = `${config.PATHS.screenshots}/login_fail_${account.username}_${Date.now()}.png`;
-    await page.screenshot({ path: screenshotPath, fullPage: true }).catch(() => {});
     return false;
   }
 }

@@ -147,10 +147,6 @@ async function sendProposal(page, influencer, product, dryRun = false, accountNa
       await newPage.waitForTimeout(3000);
     }
 
-    // 성공 스크린샷
-    const screenshotPath = `${config.PATHS.screenshots}/sent_${influencer.nickname}_${Date.now()}.png`;
-    await newPage.screenshot({ path: screenshotPath }).catch(() => {});
-
     // 새 창 닫기
     await newPage.close();
 
@@ -158,9 +154,6 @@ async function sendProposal(page, influencer, product, dryRun = false, accountNa
     return { success: true };
   } catch (error) {
     console.error(`${label} 발송 실패:`, error.message);
-
-    const screenshotPath = `${config.PATHS.screenshots}/fail_${influencer.nickname}_${Date.now()}.png`;
-    await page.screenshot({ path: screenshotPath, fullPage: true }).catch(() => {});
 
     return { success: false, error: error.message };
   }
