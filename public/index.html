@@ -341,69 +341,89 @@
       renderProducts();
     }
 
+    let openProductIdx = -1;
+
     function renderProducts() {
       const container = document.getElementById('productsList');
       document.getElementById('productCount').textContent = products.length;
-      container.innerHTML = products.map((p, i) => `
-        <div class="product-card" id="product-${i}">
-          <div class="product-header">
-            <span class="product-name">${esc(p.name) || '새 제품'}</span>
-            <div class="btn-group">
-              <button class="btn btn-primary btn-sm" onclick="saveProducts()">저장</button>
-              <button class="btn btn-danger btn-sm" onclick="removeProduct(${i})">삭제</button>
+      container.innerHTML = products.map((p, i) => {
+        const isOpen = openProductIdx === i;
+        return `
+        <div class="product-card ${isOpen ? 'editing' : ''}" id="product-${i}" style="cursor:pointer">
+          <div class="product-header" onclick="toggleProduct(${i})">
+            <div style="display:flex;align-items:center;gap:10px">
+              <span style="font-size:14px;color:#6b7280;transition:transform 0.2s;display:inline-block;transform:rotate(${isOpen?'90':'0'}deg)">&gt;</span>
+              <span class="product-name">${esc(p.name) || '새 제품'}</span>
+              <span style="font-size:12px;color:#9ca3af">${esc(p.brandName)} · ${esc(p.productName)} · ${esc(p.campaignType)} · ${esc(p.category)}</span>
             </div>
           </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-            <div class="form-group">
-              <label>관리명 (인플루언서 목록에서 매칭용)</label>
-              <input type="text" value="${esc(p.name)}" onchange="products[${i}].name=this.value">
+          <div style="display:${isOpen ? 'block' : 'none'};margin-top:16px">
+            <div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:12px">
+              <button class="btn btn-primary btn-sm" onclick="event.stopPropagation();saveProducts()">저장</button>
+              <button class="btn btn-danger btn-sm" onclick="event.stopPropagation();removeProduct(${i})">삭제</button>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+              <div class="form-group">
+                <label>관리명 (인플루언서 목록에서 매칭용)</label>
+                <input type="text" value="${esc(p.name)}" onchange="products[${i}].name=this.value;updateProductHeader(${i})" onclick="event.stopPropagation()">
+              </div>
+              <div class="form-group">
+                <label>캠페인 유형</label>
+                <select onchange="products[${i}].campaignType=this.value;updateProductHeader(${i})" onclick="event.stopPropagation()">
+                  ${['공동구매','협찬','광고','체험단','기타'].map(t => `<option value="${t}" ${p.campaignType===t?'selected':''}>${t}</option>`).join('')}
+                </select>
+              </div>
+              <div class="form-group">
+                <label>브랜드명</label>
+                <input type="text" value="${esc(p.brandName)}" onchange="products[${i}].brandName=this.value;updateProductHeader(${i})" onclick="event.stopPropagation()">
+              </div>
+              <div class="form-group">
+                <label>제품명</label>
+                <input type="text" value="${esc(p.productName)}" onchange="products[${i}].productName=this.value;updateProductHeader(${i})" onclick="event.stopPropagation()">
+              </div>
+              <div class="form-group">
+                <label>카테고리</label>
+                <select onchange="products[${i}].category=this.value;updateProductHeader(${i})" onclick="event.stopPropagation()">
+                  ${['육아·키즈','홈·리빙','뷰티','패션','식품','디지털','여행','건강','반려동물','기타'].map(t => `<option value="${t}" ${p.category===t?'selected':''}>${t}</option>`).join('')}
+                </select>
+              </div>
             </div>
             <div class="form-group">
-              <label>캠페인 유형</label>
-              <select onchange="products[${i}].campaignType=this.value">
-                ${['공동구매','협찬','광고','체험단','기타'].map(t => `<option value="${t}" ${p.campaignType===t?'selected':''}>${t}</option>`).join('')}
-              </select>
+              <label>제품 특징 (USP)</label>
+              <textarea rows="3" onchange="products[${i}].usp=this.value" onclick="event.stopPropagation()">${esc(p.usp)}</textarea>
             </div>
             <div class="form-group">
-              <label>브랜드명</label>
-              <input type="text" value="${esc(p.brandName)}" onchange="products[${i}].brandName=this.value">
+              <label>제안 내용</label>
+              <textarea rows="4" onchange="products[${i}].offerMessage=this.value" onclick="event.stopPropagation()">${esc(p.offerMessage)}</textarea>
             </div>
             <div class="form-group">
-              <label>제품명</label>
-              <input type="text" value="${esc(p.productName)}" onchange="products[${i}].productName=this.value">
-            </div>
-            <div class="form-group">
-              <label>카테고리</label>
-              <select onchange="products[${i}].category=this.value">
-                ${['육아·키즈','뷰티','패션','식품','리빙','디지털','여행','건강','반려동물','기타'].map(t => `<option value="${t}" ${p.category===t?'selected':''}>${t}</option>`).join('')}
-              </select>
+              <label>사진</label>
+              <div class="photo-grid" onclick="event.stopPropagation()">
+                ${(p.photos||[]).map((photo, pi) => `
+                  <div style="position:relative">
+                    <img class="photo-thumb" src="/assets/${photo.split('/').pop()}" onerror="this.style.display='none'">
+                    <button style="position:absolute;top:-4px;right:-4px;background:#ef4444;color:white;border:none;border-radius:50%;width:18px;height:18px;font-size:10px;cursor:pointer" onclick="removePhoto(${i},${pi})">X</button>
+                  </div>
+                `).join('')}
+                <label class="photo-upload-btn">
+                  +
+                  <input type="file" multiple accept="image/*" style="display:none" onchange="uploadPhotos(${i}, this.files)">
+                </label>
+              </div>
             </div>
           </div>
-          <div class="form-group">
-            <label>제품 특징 (USP)</label>
-            <textarea rows="3" onchange="products[${i}].usp=this.value">${esc(p.usp)}</textarea>
-          </div>
-          <div class="form-group">
-            <label>제안 내용</label>
-            <textarea rows="4" onchange="products[${i}].offerMessage=this.value">${esc(p.offerMessage)}</textarea>
-          </div>
-          <div class="form-group">
-            <label>사진</label>
-            <div class="photo-grid">
-              ${(p.photos||[]).map((photo, pi) => `
-                <div style="position:relative">
-                  <img class="photo-thumb" src="/assets/${photo.split('/').pop()}" onerror="this.style.display='none'">
-                  <button style="position:absolute;top:-4px;right:-4px;background:#ef4444;color:white;border:none;border-radius:50%;width:18px;height:18px;font-size:10px;cursor:pointer" onclick="removePhoto(${i},${pi})">X</button>
-                </div>
-              `).join('')}
-              <label class="photo-upload-btn">
-                +
-                <input type="file" multiple accept="image/*" style="display:none" onchange="uploadPhotos(${i}, this.files)">
-              </label>
-            </div>
-          </div>
-        </div>
-      `).join('');
+        </div>`;
+      }).join('');
+    }
+
+    function toggleProduct(i) {
+      openProductIdx = openProductIdx === i ? -1 : i;
+      renderProducts();
+    }
+
+    function updateProductHeader(i) {
+      // 헤더 텍스트만 즉시 갱신 (접힘 상태 유지)
+      renderProducts();
     }
 
     function addProduct() {
@@ -417,6 +437,7 @@
         offerMessage: '',
         photos: []
       });
+      openProductIdx = 0;
       renderProducts();
     }
 

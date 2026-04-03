@@ -14,8 +14,14 @@ async function sendProposal(page, influencer, product, dryRun = false, accountNa
   console.log(`${label} 발송 시작 → ${influencer.profileUrl}`);
 
   try {
-    // URL에 https:// 없으면 자동 추가
+    // 메일 형식이면 skip
     let url = influencer.profileUrl;
+    if (url.includes('@')) {
+      console.warn(`${label} 메일 형식 URL - 건너뜀: ${url}`);
+      return { success: false, error: '메일형식' };
+    }
+
+    // URL에 https:// 없으면 자동 추가
     if (!url.startsWith('http://') && !url.startsWith('https://')) {
       url = 'https://' + url;
     }

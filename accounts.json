@@ -108,13 +108,15 @@
     "username": "newrich.asset14",
     "password": "wowls158!@#",
     "weeklyTracking": {
-      "2026-W14": 1
+      "2026-W14": 10
     }
   },
   {
     "id": 15,
     "username": "newrich.asset15",
     "password": "wowls158!@#",
-    "weeklyTracking": {}
+    "weeklyTracking": {
+      "2026-W14": 10
+    }
   }
 ]
