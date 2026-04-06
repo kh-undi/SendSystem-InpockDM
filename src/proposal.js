@@ -20,6 +20,12 @@ async function sendProposal(page, influencer, product, dryRun = false, accountNa
       console.warn(`${label} 메일 형식 URL - 건너뜀: ${url}`);
       return { success: false, error: '메일형식' };
     }
+    
+    // "x" 입력된 URL은 건너뜀
+    if (url.toLowerCase() === 'x') {
+      console.warn(`${label} X - 건너뜀: ${url}`);
+      return { success: false, error: '[XXX] URL_NOT_FOUND' };
+    }
 
     // URL에 https:// 없으면 자동 추가
     if (!url.startsWith('http://') && !url.startsWith('https://')) {

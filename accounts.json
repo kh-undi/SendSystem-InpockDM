@@ -4,7 +4,7 @@
     "username": "newrich.asset",
     "password": "wowls158!@#",
     "weeklyTracking": {
-      "2026-W14": 10
+      "2026-W15": 10
     }
   },
   {
@@ -12,7 +12,7 @@
     "username": "newrich.asset1",
     "password": "wowls158!@#",
     "weeklyTracking": {
-      "2026-W14": 10
+      "2026-W15": 10
     }
   },
   {
@@ -20,7 +20,7 @@
     "username": "newrich.asset2",
     "password": "wowls158!@#",
     "weeklyTracking": {
-      "2026-W14": 10
+      "2026-W15": 10
     }
   },
   {
@@ -28,7 +28,7 @@
     "username": "newrich.asset3",
     "password": "wowls158!@#",
     "weeklyTracking": {
-      "2026-W14": 10
+      "2026-W15": 10
     }
   },
   {
@@ -36,7 +36,7 @@
     "username": "newrich.asset4",
     "password": "wowls158!@#",
     "weeklyTracking": {
-      "2026-W14": 10
+      "2026-W15": 10
     }
   },
   {
@@ -44,7 +44,7 @@
     "username": "newrich.asset5",
     "password": "wowls158!@#",
     "weeklyTracking": {
-      "2026-W14": 10
+      "2026-W15": 10
     }
   },
   {
@@ -52,7 +52,7 @@
     "username": "newrich.asset7",
     "password": "wowls158!@#",
     "weeklyTracking": {
-      "2026-W14": 10
+      "2026-W15": 10
     }
   },
   {
@@ -60,7 +60,7 @@
     "username": "newrich.asset8",
     "password": "wowls158!@#",
     "weeklyTracking": {
-      "2026-W14": 10
+      "2026-W15": 10
     }
   },
   {
@@ -68,7 +68,7 @@
     "username": "newrich.asset9",
     "password": "wowls158!@#",
     "weeklyTracking": {
-      "2026-W14": 10
+      "2026-W15": 10
     }
   },
   {
@@ -76,47 +76,37 @@
     "username": "newrich.asset10",
     "password": "wowls158!@#",
     "weeklyTracking": {
-      "2026-W14": 10
+      "2026-W15": 1
     }
   },
   {
     "id": 11,
     "username": "newrich.asset11",
     "password": "wowls158!@#",
-    "weeklyTracking": {
-      "2026-W14": 10
-    }
+    "weeklyTracking": {}
   },
   {
     "id": 12,
     "username": "newrich.asset12",
     "password": "wowls158!@#",
-    "weeklyTracking": {
-      "2026-W14": 10
-    }
+    "weeklyTracking": {}
   },
   {
     "id": 13,
     "username": "newrich.asset13",
     "password": "wowls158!@#",
-    "weeklyTracking": {
-      "2026-W14": 10
-    }
+    "weeklyTracking": {}
   },
   {
     "id": 14,
     "username": "newrich.asset14",
     "password": "wowls158!@#",
-    "weeklyTracking": {
-      "2026-W14": 10
-    }
+    "weeklyTracking": {}
   },
   {
     "id": 15,
     "username": "newrich.asset15",
     "password": "wowls158!@#",
-    "weeklyTracking": {
-      "2026-W14": 10
-    }
+    "weeklyTracking": {}
   }
 ]
