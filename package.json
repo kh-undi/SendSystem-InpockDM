@@ -7,7 +7,8 @@
     "ui": "node server.js",
     "start": "node src/index.js",
     "dry-run": "node src/index.js --dry-run",
-    "reset-counts": "node src/resetCounts.js"
+    "reset-counts": "node src/resetCounts.js",
+    "check-replies": "node src/checkReplies.js"
   },
   "dependencies": {
     "csv-parse": "^5.5.0",

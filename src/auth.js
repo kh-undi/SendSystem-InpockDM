@@ -23,6 +23,16 @@ async function login(page, account) {
     await page.waitForNavigation({ waitUntil: 'networkidle', timeout: config.NAVIGATION_TIMEOUT });
 
     console.log(`${tag} [로그인] 로그인 성공!`);
+
+    // 캐시 비우기 + 새로고침 (쿠키/세션은 유지)
+    try {
+      const client = await page.context().newCDPSession(page);
+      await client.send('Network.clearBrowserCache');
+      await client.detach();
+    } catch {}
+    await page.reload({ waitUntil: 'networkidle' });
+    console.log(`${tag} [로그인] 캐시 비우기 + 새로고침 완료`);
+
     return true;
   } catch (error) {
     console.error(`${tag} [로그인 실패] ${error.message}`);

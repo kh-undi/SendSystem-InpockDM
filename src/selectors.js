@@ -16,6 +16,12 @@ module.exports = {
     submitButton: 'button.inpock-button.size-large.type-primary.full-width',
   },
 
+  // ===== 채팅 (답장 확인) =====
+  chat: {
+    pageUrl: 'https://business.inpock.co.kr/admin/deal/chat',
+    badge: 'div.sendbird-badge',
+  },
+
   // ===== 로그아웃 =====
   logout: {
     // 1. 로그아웃 진입 경로

@@ -187,6 +187,51 @@ app.get('/api/macro/status', (req, res) => {
   });
 });
 
+// ─── 답장 확인 API ───
+let replyProcess = null;
+let replyLogs = [];
+
+app.post('/api/replies/check', (req, res) => {
+  if (replyProcess) return res.status(400).json({ error: '이미 실행 중입니다.' });
+  if (macroProcess) return res.status(400).json({ error: '발송 매크로가 실행 중입니다.' });
+
+  replyLogs = [];
+  const { spawn } = require('child_process');
+  replyProcess = spawn('node', [path.join(__dirname, 'src/checkReplies.js')], { cwd: __dirname });
+
+  replyProcess.stdout.on('data', (data) => {
+    const lines = data.toString().split('\n').filter(l => l.trim());
+    replyLogs.push(...lines);
+  });
+  replyProcess.stderr.on('data', (data) => {
+    const lines = data.toString().split('\n').filter(l => l.trim());
+    replyLogs.push(...lines.map(l => `[ERROR] ${l}`));
+  });
+  replyProcess.on('close', (code) => {
+    replyLogs.push(`\n[완료] 프로세스 종료 (코드: ${code})`);
+    replyProcess = null;
+  });
+
+  res.json({ ok: true });
+});
+
+app.post('/api/replies/stop', (req, res) => {
+  if (!replyProcess) return res.status(400).json({ error: '실행 중이 아닙니다.' });
+  replyProcess.kill('SIGTERM');
+  replyProcess = null;
+  replyLogs.push('[중단] 사용자에 의해 중단됨');
+  res.json({ ok: true });
+});
+
+app.get('/api/replies/status', (req, res) => {
+  const repliesPath = path.join(__dirname, 'replies.json');
+  let results = null;
+  if (fs.existsSync(repliesPath)) {
+    try { results = JSON.parse(fs.readFileSync(repliesPath, 'utf-8')); } catch {}
+  }
+  res.json({ running: replyProcess !== null, logs: replyLogs, results });
+});
+
 // ─── 서버 시작 ───
 app.listen(PORT, () => {
   console.log(`\n  인포크링크 매크로 관리 UI`);
