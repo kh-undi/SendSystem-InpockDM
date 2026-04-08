@@ -1,5 +1,6 @@
 {
-  "checkedAt": "2026-04-07T06:45:12.310Z",
+  "checkedAt": "2026-04-08T01:20:34.309Z",
+  "partial": false,
   "results": [
     {
       "account": "newrich.asset",
@@ -38,7 +39,7 @@
     },
     {
       "account": "newrich.asset8",
-      "replyCount": 1,
+      "replyCount": 0,
       "error": null
     },
     {

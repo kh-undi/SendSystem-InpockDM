@@ -257,6 +257,10 @@
           </div>
         </div>
         <p style="font-size:13px;color:#6b7280;margin-bottom:12px">각 계정에 로그인하여 새 탭에서 답장 온 메시지(sendbird 뱃지) 개수를 확인합니다. 뱃지 1개 = 1명에게서 답장.</p>
+        <div class="form-group" style="max-width:320px">
+          <label>시작 계정</label>
+          <select id="repliesStartAccount"></select>
+        </div>
         <div id="repliesResult"></div>
         <div class="log-area" id="repliesLogArea" style="margin-top:12px">대기 중...\n</div>
       </div>
@@ -294,6 +298,7 @@
     }
 
     function renderAccounts() {
+      renderRepliesAccountOptions();
       const tbody = document.getElementById('accountsBody');
       document.getElementById('accountCount').textContent = accounts.length;
       tbody.innerHTML = accounts.map((acc, i) => {
@@ -686,8 +691,22 @@
     // ═══════════════════════════════════════
     let repliesPolling = null;
 
+    function renderRepliesAccountOptions() {
+      const sel = document.getElementById('repliesStartAccount');
+      if (!sel) return;
+      const prev = sel.value;
+      sel.innerHTML = '<option value="">전체 (처음부터)</option>' +
+        accounts.map(a => `<option value="${esc(a.username)}">${esc(a.username)}</option>`).join('');
+      if (prev) sel.value = prev;
+    }
+
     async function startCheckReplies() {
-      const res = await fetch('/api/replies/check', { method: 'POST' });
+      const startFrom = document.getElementById('repliesStartAccount').value;
+      const res = await fetch('/api/replies/check', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ startFrom: startFrom || undefined }),
+      });
       const data = await res.json();
       if (!res.ok) return alert(data.error || '시작 실패');
       document.getElementById('btnCheckReplies').style.display = 'none';

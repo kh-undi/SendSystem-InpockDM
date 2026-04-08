@@ -197,7 +197,11 @@ app.post('/api/replies/check', (req, res) => {
 
   replyLogs = [];
   const { spawn } = require('child_process');
-  replyProcess = spawn('node', [path.join(__dirname, 'src/checkReplies.js')], { cwd: __dirname });
+  // [요청] startFrom 지정 시 해당 계정부터 순차 시작
+  const { startFrom } = req.body || {};
+  const args = [path.join(__dirname, 'src/checkReplies.js')];
+  if (startFrom) args.push('--start', startFrom);
+  replyProcess = spawn('node', args, { cwd: __dirname });
 
   replyProcess.stdout.on('data', (data) => {
     const lines = data.toString().split('\n').filter(l => l.trim());
