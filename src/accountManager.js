@@ -47,9 +47,9 @@ function getRemainingSlots(account) {
 /**
  * 발송 가능한 계정 찾기 (이번 주 10개 미만 발송한 첫 번째 계정)
  */
-function getAvailableAccount() {
+function getAvailableAccount(excludeIds = new Set()) {
   const accounts = loadAccounts();
-  return accounts.find(acc => getRemainingSlots(acc) > 0) || null;
+  return accounts.find(acc => !excludeIds.has(acc.id) && getRemainingSlots(acc) > 0) || null;
 }
 
 /**

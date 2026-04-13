@@ -56,19 +56,8 @@ async function main() {
     headless: config.HEADLESS,
     slowMo: config.SLOW_MO,
   });
-  // 화면 크기를 모니터 해상도에 맞춤
-  const { execSync } = require('child_process');
-  let screenWidth = 1280, screenHeight = 900;
-  try {
-    const wmicOut = execSync('wmic path Win32_VideoController get CurrentVerticalResolution,CurrentHorizontalResolution /format:value', { encoding: 'utf-8' });
-    const wMatch = wmicOut.match(/CurrentHorizontalResolution=(\d+)/);
-    const hMatch = wmicOut.match(/CurrentVerticalResolution=(\d+)/);
-    if (wMatch) screenWidth = parseInt(wMatch[1]);
-    if (hMatch) screenHeight = parseInt(hMatch[1]);
-  } catch {}
-
   const context = await browser.newContext({
-    viewport: { width: screenWidth, height: screenHeight },
+    viewport: { width: 800, height: 600 },
   });
   const page = await context.newPage();
   page.setDefaultTimeout(config.NAVIGATION_TIMEOUT);
@@ -79,11 +68,12 @@ async function main() {
   let totalFailed = 0;
   let accountsUsed = 0;
   const failedList = []; // 실패한 인플루언서 목록
+  const loginFailedIds = new Set(); // 로그인 실패한 계정 ID
 
   try {
     while (queue.length > 0) {
-      // 사용 가능한 계정 찾기
-      const account = accountManager.getAvailableAccount();
+      // 사용 가능한 계정 찾기 (로그인 실패한 계정 제외)
+      const account = accountManager.getAvailableAccount(loginFailedIds);
       if (!account) {
         console.log('\n[중단] 이번 주 모든 계정 한도 소진됨.');
         break;
@@ -96,10 +86,7 @@ async function main() {
       const loggedIn = await login(page, account);
       if (!loggedIn) {
         console.log(`[건너뜀] 계정 ${account.id} 로그인 실패, 다음 계정으로...`);
-        // 로그인 실패한 계정은 한도를 꽉 채워서 다시 선택 안 되게 함
-        for (let i = 0; i < remaining; i++) {
-          accountManager.incrementSendCount(account.id);
-        }
+        loginFailedIds.add(account.id);
         continue;
       }
       accountsUsed++;

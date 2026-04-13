@@ -36,7 +36,46 @@ async function login(page, account) {
     return true;
   } catch (error) {
     console.error(`${tag} [로그인 실패] ${error.message}`);
-    return false;
+    console.log(`${tag} [로그인] 캐시 비우기 + 새로고침 후 재시도...`);
+
+    // 캐시 비우기
+    try {
+      const client = await page.context().newCDPSession(page);
+      await client.send('Network.clearBrowserCache');
+      await client.detach();
+    } catch {}
+    await page.context().clearCookies();
+
+    // 새로고침 후 재시도
+    try {
+      await page.goto(selectors.login.pageUrl, {
+        waitUntil: 'networkidle',
+        timeout: config.NAVIGATION_TIMEOUT,
+      });
+
+      await page.waitForSelector(selectors.login.usernameInput, { timeout: 10000 });
+      await page.fill(selectors.login.usernameInput, account.username);
+      await page.fill(selectors.login.passwordInput, account.password);
+      await page.waitForTimeout(500);
+
+      await page.getByRole('button', { name: '인포크비즈니스 로그인' }).click();
+      await page.waitForNavigation({ waitUntil: 'networkidle', timeout: config.NAVIGATION_TIMEOUT });
+
+      console.log(`${tag} [로그인] 재시도 성공!`);
+
+      try {
+        const client2 = await page.context().newCDPSession(page);
+        await client2.send('Network.clearBrowserCache');
+        await client2.detach();
+      } catch {}
+      await page.reload({ waitUntil: 'networkidle' });
+      console.log(`${tag} [로그인] 캐시 비우기 + 새로고침 완료`);
+
+      return true;
+    } catch (retryError) {
+      console.error(`${tag} [로그인 재시도 실패] ${retryError.message}`);
+      return false;
+    }
   }
 }
 

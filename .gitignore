@@ -6,3 +6,9 @@ logs/
 failed.json
 screenshots/
 .DS_Store
+
+
+accounts.json
+influencers.csv
+influencers.json
+replies.json
