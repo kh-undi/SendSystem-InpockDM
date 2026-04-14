@@ -117,7 +117,10 @@
 <body>
   <div class="header">
     <h1>인포크링크 제안서 매크로</h1>
-    <div class="status-badge" id="headerStatus">준비</div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <div class="status-badge" id="headerReplyBadge" style="display:none;background:rgba(99,102,241,0.9);cursor:pointer" onclick="goToRepliesTab()"></div>
+      <div class="status-badge" id="headerStatus">준비</div>
+    </div>
   </div>
 
   <div class="tabs">
@@ -285,8 +288,50 @@
         document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
         tab.classList.add('active');
         document.getElementById('panel-' + tab.dataset.panel).classList.add('active');
+        // 답장확인 탭 진입 시 배지 숨기고 확인 시각 저장
+        if (tab.dataset.panel === 'replies') {
+          document.getElementById('headerReplyBadge').style.display = 'none';
+          localStorage.setItem('repliesSeenAt', new Date().toISOString());
+        }
       });
     });
+
+    // ═══════════════════════════════════════
+    //  헤더 답장 배지 (인포크 N건)
+    // ═══════════════════════════════════════
+    async function updateReplyBadge() {
+      try {
+        const res = await fetch('/api/replies/status');
+        const data = await res.json();
+        if (!data.results || !data.results.results) return;
+
+        const checkedAt = data.results.checkedAt;
+        const seenAt = localStorage.getItem('repliesSeenAt');
+        // 이미 본 결과면 배지 숨김
+        if (seenAt && seenAt >= checkedAt) {
+          document.getElementById('headerReplyBadge').style.display = 'none';
+          return;
+        }
+
+        const total = data.results.results.reduce((sum, r) => sum + (r.replyCount || 0), 0);
+        const badge = document.getElementById('headerReplyBadge');
+        if (total > 0) {
+          badge.textContent = `인포크 ${total}건`;
+          badge.style.display = 'inline-block';
+        } else {
+          badge.style.display = 'none';
+        }
+      } catch {}
+    }
+
+    function goToRepliesTab() {
+      const repliesTab = document.querySelector('.tab[data-panel="replies"]');
+      if (repliesTab) repliesTab.click();
+    }
+
+    // 페이지 로드 시 + 30초마다 배지 업데이트
+    updateReplyBadge();
+    setInterval(updateReplyBadge, 30000);
 
     // ═══════════════════════════════════════
     //  계정 관리
@@ -314,7 +359,10 @@
               <input type="number" min="0" max="10" value="${acc.sent}" style="width:40px;text-align:center;padding:4px;border:1px solid #d1d5db;border-radius:4px" onchange="updateSentCount(${i}, this.value)">/10
             </div>
           </td>
-          <td><button class="btn btn-danger btn-sm" onclick="removeAccount(${i})">X</button></td>
+          <td style="display:flex;gap:4px">
+            <button class="btn btn-sm" style="background:#6b7280;color:#fff;border:none;padding:2px 8px;border-radius:4px;cursor:pointer" onclick="resetAccountCount(${i})" title="이번주 발송 0으로 초기화">0</button>
+            <button class="btn btn-danger btn-sm" onclick="removeAccount(${i})">X</button>
+          </td>
         </tr>`;
       }).join('');
     }
@@ -334,6 +382,10 @@
       const nextId = accounts.length > 0 ? Math.max(...accounts.map(a => a.id)) + 1 : 1;
       accounts.push({ id: nextId, username: '', password: '', weeklyTracking: {}, sent: 0, remaining: 10 });
       renderAccounts();
+    }
+
+    function resetAccountCount(i) {
+      updateSentCount(i, 0);
     }
 
     function removeAccount(i) {

@@ -2,6 +2,7 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
+const cron = require('node-cron');
 const config = require('./config');
 const accountManager = require('./src/accountManager');
 
@@ -236,8 +237,35 @@ app.get('/api/replies/status', (req, res) => {
   res.json({ running: replyProcess !== null, logs: replyLogs, results });
 });
 
+// ─── 매일 오전 9시, 오후 12시 자동 답장확인 ───
+cron.schedule('0 9,12 * * *', () => {
+  if (replyProcess || macroProcess) {
+    console.log('[크론] 답장확인 건너뜀 - 다른 프로세스 실행 중');
+    return;
+  }
+  const hour = new Date().getHours();
+  console.log(`[크론] ${hour}시 자동 답장확인 시작`);
+  replyLogs = [];
+  const { spawn } = require('child_process');
+  replyProcess = spawn('node', [path.join(__dirname, 'src/checkReplies.js')], { cwd: __dirname });
+
+  replyProcess.stdout.on('data', (data) => {
+    const lines = data.toString().split('\n').filter(l => l.trim());
+    replyLogs.push(...lines);
+  });
+  replyProcess.stderr.on('data', (data) => {
+    const lines = data.toString().split('\n').filter(l => l.trim());
+    replyLogs.push(...lines.map(l => `[ERROR] ${l}`));
+  });
+  replyProcess.on('close', (code) => {
+    replyLogs.push(`\n[완료] 프로세스 종료 (코드: ${code})`);
+    replyProcess = null;
+  });
+});
+
 // ─── 서버 시작 ───
 app.listen(PORT, () => {
   console.log(`\n  인포크링크 매크로 관리 UI`);
-  console.log(`  http://localhost:${PORT}\n`);
+  console.log(`  http://localhost:${PORT}`);
+  console.log(`  [크론] 매일 오전 9시, 오후 12시 자동 답장확인 활성화\n`);
 });
