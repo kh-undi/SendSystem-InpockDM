@@ -54,6 +54,35 @@ app.post('/api/accounts/reset', (req, res) => {
   res.json({ ok: true });
 });
 
+// ─── 이메일 계정 API (Gmail) ───
+app.get('/api/emailAccounts', (req, res) => {
+  if (!fs.existsSync(config.PATHS.emailAccounts)) {
+    fs.writeFileSync(config.PATHS.emailAccounts, '[]', 'utf-8');
+  }
+  const list = JSON.parse(fs.readFileSync(config.PATHS.emailAccounts, 'utf-8'));
+  // 비밀번호는 마스킹하지 않고 그대로 반환 (UI에서 수정 가능해야 함)
+  res.json(list);
+});
+
+app.put('/api/emailAccounts', (req, res) => {
+  const list = req.body;
+  fs.writeFileSync(config.PATHS.emailAccounts, JSON.stringify(list, null, 2), 'utf-8');
+  res.json({ ok: true });
+});
+
+app.post('/api/emailAccounts/verify', async (req, res) => {
+  const { id } = req.body || {};
+  const { findEmailAccount, verifyTransport } = require('./src/emailSender');
+  const acc = findEmailAccount(id);
+  if (!acc) return res.status(404).json({ error: '이메일 계정을 찾을 수 없습니다.' });
+  try {
+    await verifyTransport(acc);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
 // ─── 제품 API ───
 app.get('/api/products', (req, res) => {
   const data = JSON.parse(fs.readFileSync(config.PATHS.products, 'utf-8'));
@@ -133,7 +162,7 @@ let macroLogs = [];
 app.post('/api/macro/start', (req, res) => {
   if (macroProcess) return res.status(400).json({ error: '이미 실행 중입니다.' });
 
-  const { dryRun } = req.body || {};
+  const { dryRun, emailAccountId } = req.body || {};
 
   // 인플루언서 데이터를 influencers.json에서 읽어 CSV로 변환 후 실행
   const influencersPath = path.join(__dirname, 'influencers.json');
@@ -141,6 +170,15 @@ app.post('/api/macro/start', (req, res) => {
 
   if (influencers.length === 0) {
     return res.status(400).json({ error: '발송할 인플루언서가 없습니다.' });
+  }
+
+  // 이메일 타겟이 있는데 이메일 계정이 지정/존재하지 않으면 중단
+  const hasEmailTarget = influencers.some(i => (i.profileUrl || '').includes('@'));
+  if (hasEmailTarget) {
+    const { findEmailAccount } = require('./src/emailSender');
+    if (!findEmailAccount(emailAccountId)) {
+      return res.status(400).json({ error: '이메일 주소가 포함되어 있으나 선택된 Gmail 계정이 없습니다.' });
+    }
   }
 
   // JSON → CSV 변환 (기존 index.js가 CSV를 읽으므로)
@@ -153,7 +191,11 @@ app.post('/api/macro/start', (req, res) => {
   if (dryRun) args.push('--dry-run');
 
   const { spawn } = require('child_process');
-  macroProcess = spawn('node', args, { cwd: __dirname });
+  const env = { ...process.env };
+  if (emailAccountId != null && emailAccountId !== '') {
+    env.EMAIL_ACCOUNT_ID = String(emailAccountId);
+  }
+  macroProcess = spawn('node', args, { cwd: __dirname, env });
 
   macroProcess.stdout.on('data', (data) => {
     const lines = data.toString().split('\n').filter(l => l.trim());

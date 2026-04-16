@@ -5,10 +5,12 @@ const { readInfluencersAuto } = require('./influencerReader');
 const { login, logout } = require('./auth');
 const { sendProposal } = require('./proposal');
 const { logSent } = require('./logger');
+const { isEmailAddress, findEmailAccount, sendMail } = require('./emailSender');
 const fs = require('fs');
 const path = require('path');
 
 const DRY_RUN = process.argv.includes('--dry-run');
+const EMAIL_ACCOUNT_ID = process.env.EMAIL_ACCOUNT_ID;
 
 async function main() {
   console.log('========================================');
@@ -36,21 +38,70 @@ async function main() {
     }
   }
 
-  // 3. 계정 상태 확인
+  // 3. 인플루언서를 이메일/인포크로 분리
+  const emailTargets = influencers.filter(i => isEmailAddress(i.profileUrl));
+  const inpockTargets = influencers.filter(i => !isEmailAddress(i.profileUrl));
+
+  console.log(`\n[분류] 이메일: ${emailTargets.length}명 / 인포크: ${inpockTargets.length}명`);
+
+  const failedList = [];
+  let totalSent = 0;
+  let totalFailed = 0;
+
+  // ── 3-1. 이메일 타겟 먼저 발송 ──
+  if (emailTargets.length > 0) {
+    const emailAccount = findEmailAccount(EMAIL_ACCOUNT_ID);
+    if (!emailAccount) {
+      console.error('[오류] 이메일 타겟이 있으나 Gmail 계정이 설정되지 않았습니다.');
+      for (const t of emailTargets) {
+        failedList.push({ ...t, error: 'Gmail 계정 미선택' });
+        totalFailed++;
+      }
+    } else {
+      console.log(`\n──── Gmail 발송 (${emailAccount.email}) ────`);
+      for (const inf of emailTargets) {
+        const product = productMap.get(inf.productName);
+        if (DRY_RUN) {
+          console.log(`[DRY-RUN] 메일 발송 건너뜀: ${inf.nickname} → ${inf.profileUrl}`);
+          totalSent++;
+          continue;
+        }
+        const result = await sendMail(emailAccount, inf, product);
+        if (result.success) {
+          totalSent++;
+          logSent(`mail:${emailAccount.id}`, inf);
+        } else {
+          totalFailed++;
+          failedList.push({ ...inf, error: result.error });
+        }
+        // 메일 간 약간의 간격 (Gmail 속도 제한 회피)
+        await new Promise(r => setTimeout(r, 1500));
+      }
+    }
+  }
+
+  // ── 3-2. 인포크 타겟이 없으면 브라우저 생략 ──
+  if (inpockTargets.length === 0) {
+    finalize(totalSent, totalFailed, 0, [], failedList);
+    return;
+  }
+
+  // 4. 계정 상태 확인
   console.log('\n[계정 상태]');
   const status = accountManager.getStatusSummary();
   for (const s of status) {
     console.log(`  계정 ${s.id} (${s.username}): ${s.sent}/${config.WEEKLY_LIMIT} 발송 (남은: ${s.remaining})`);
   }
   const totalRemaining = status.reduce((sum, s) => sum + s.remaining, 0);
-  console.log(`  총 발송 가능: ${totalRemaining}건 / 처리할 인플루언서: ${influencers.length}명\n`);
+  console.log(`  총 발송 가능: ${totalRemaining}건 / 처리할 인포크 인플루언서: ${inpockTargets.length}명\n`);
 
   if (totalRemaining === 0) {
     console.log('[완료] 이번 주 모든 계정의 발송 한도가 소진되었습니다.');
+    finalize(totalSent, totalFailed, 0, inpockTargets, failedList);
     return;
   }
 
-  // 4. 브라우저 실행
+  // 5. 브라우저 실행
   const browser = await chromium.launch({
     headless: config.HEADLESS,
     slowMo: config.SLOW_MO,
@@ -61,17 +112,13 @@ async function main() {
   const page = await context.newPage();
   page.setDefaultTimeout(config.NAVIGATION_TIMEOUT);
 
-  // 5. 메인 루프
-  const queue = [...influencers];
-  let totalSent = 0;
-  let totalFailed = 0;
+  // 6. 메인 루프
+  const queue = [...inpockTargets];
   let accountsUsed = 0;
-  const failedList = []; // 실패한 인플루언서 목록
-  const loginFailedIds = new Set(); // 로그인 실패한 계정 ID
+  const loginFailedIds = new Set();
 
   try {
     while (queue.length > 0) {
-      // 사용 가능한 계정 찾기 (로그인 실패한 계정 제외)
       const account = accountManager.getAvailableAccount(loginFailedIds);
       if (!account) {
         console.log('\n[중단] 이번 주 모든 계정 한도 소진됨.');
@@ -81,7 +128,6 @@ async function main() {
       const remaining = accountManager.getRemainingSlots(account);
       console.log(`\n──── 계정 ${account.id} 사용 (남은 슬롯: ${remaining}) ────`);
 
-      // 로그인
       const loggedIn = await login(page, account);
       if (!loggedIn) {
         console.log(`[건너뜀] 계정 ${account.id} 로그인 실패, 다음 계정으로...`);
@@ -90,7 +136,6 @@ async function main() {
       }
       accountsUsed++;
 
-      // 이 계정으로 성공 카운트가 10 찰 때까지 큐에서 하나씩 처리
       let sentThisAccount = 0;
       while (queue.length > 0 && sentThisAccount < remaining) {
         const influencer = queue.shift();
@@ -111,11 +156,9 @@ async function main() {
           failedList.push({ ...influencer, error: result.error });
         }
 
-        // 발송 사이 대기
         await page.waitForTimeout(config.ACTION_DELAY);
       }
 
-      // 로그아웃
       await logout(page, account.username);
     }
   } catch (error) {
@@ -124,24 +167,25 @@ async function main() {
     await browser.close();
   }
 
-  // 6. 결과 요약
+  finalize(totalSent, totalFailed, accountsUsed, queue, failedList);
+}
+
+function finalize(totalSent, totalFailed, accountsUsed, queue, failedList) {
   console.log('\n========================================');
   console.log('  발송 결과 요약');
   console.log('========================================');
   console.log(`  성공: ${totalSent}건`);
   console.log(`  실패: ${totalFailed}건`);
   console.log(`  미처리: ${queue.length}건`);
-  console.log(`  사용 계정: ${accountsUsed}개`);
+  console.log(`  사용 인포크 계정: ${accountsUsed}개`);
   console.log('========================================');
 
-  // 실패 목록 출력 & 파일 저장
   if (failedList.length > 0) {
     console.log('\n[실패 목록]');
     for (const f of failedList) {
       console.log(`  - ${f.nickname} | ${f.profileUrl} | ${f.productName} | 사유: ${f.error}`);
     }
 
-    // failed.json 저장 (재발송용)
     const failedPath = path.join(__dirname, '..', 'failed.json');
     fs.writeFileSync(failedPath, JSON.stringify(failedList, null, 2), 'utf-8');
     console.log(`\n[실패 목록 저장] ${failedPath}`);

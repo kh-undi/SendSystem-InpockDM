@@ -22,10 +22,15 @@ module.exports = {
   // 파일 경로
   PATHS: {
     accounts: path.resolve(__dirname, 'accounts.json'),
+    emailAccounts: path.resolve(__dirname, 'emailAccounts.json'),
     products: path.resolve(__dirname, 'products.json'),
     influencers: path.resolve(__dirname, 'influencers.csv'),
     sentLog: path.resolve(__dirname, 'logs/sent.log'),
     logs: path.resolve(__dirname, 'logs'),
     screenshots: path.resolve(__dirname, 'screenshots'),
   },
+
+  MAIL_SUBJECT_PREFIX: '[언엑스 공동구매]',
+  MAIL_SUBJECT_SUFFIX: '공동구매 제안 건',
+  MAIL_BCC: 'kh.park@undefiancecorp.com',
 };

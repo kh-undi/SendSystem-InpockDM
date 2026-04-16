@@ -135,9 +135,23 @@
 
     <!-- ═══ 계정 관리 ═══ -->
     <div class="panel active" id="panel-accounts">
+      <!-- 이메일 계정 (Gmail 전용) -->
       <div class="card">
         <div class="actions-bar">
-          <div class="card-title">계정 목록 <span class="count" id="accountCount">0</span></div>
+          <div class="card-title">이메일 계정 (Gmail) <span class="count" id="emailAccountCount">0</span></div>
+          <div class="btn-group">
+            <button class="btn btn-outline btn-sm" onclick="addEmailAccount()">+ 이메일 추가</button>
+            <button class="btn btn-primary btn-sm" onclick="saveEmailAccounts()">저장</button>
+          </div>
+        </div>
+        <p style="font-size:12px;color:#6b7280;margin-bottom:12px">Gmail 앱 비밀번호 필요 (2단계 인증 → 앱 비밀번호 생성). 인플루언서 URL 칸에 이메일 주소가 있으면 Gmail로 발송됩니다. ※ Gmail 웹의 서명은 SMTP 발송에 적용되지 않으므로 아래 "서명" 칸에 직접 입력하세요.</p>
+        <div id="emailAccountsBody"></div>
+      </div>
+
+      <!-- 인포크 계정 -->
+      <div class="card">
+        <div class="actions-bar">
+          <div class="card-title">인포크 계정 <span class="count" id="accountCount">0</span></div>
           <div class="btn-group">
             <button class="btn btn-outline btn-sm" onclick="addAccount()">+ 계정 추가</button>
             <button class="btn btn-primary btn-sm" onclick="saveAccounts()">저장</button>
@@ -222,6 +236,10 @@
             <button class="btn btn-danger" id="btnStop" onclick="stopMacro()" style="display:none">중지</button>
           </div>
         </div>
+        <div class="form-group" style="max-width:360px">
+          <label>메일 발송 계정 (이메일 타겟에 사용)</label>
+          <select id="runEmailAccount"></select>
+        </div>
         <div class="log-area" id="logArea">대기 중...\n</div>
       </div>
 
@@ -277,6 +295,7 @@
     //  상태
     // ═══════════════════════════════════════
     let accounts = [];
+    let emailAccounts = [];
     let products = [];
     let influencers = [];
 
@@ -408,6 +427,171 @@
     }
 
     // ═══════════════════════════════════════
+    //  이메일 계정 (Gmail)
+    // ═══════════════════════════════════════
+    async function loadEmailAccounts() {
+      const res = await fetch('/api/emailAccounts');
+      emailAccounts = await res.json();
+      renderEmailAccounts();
+    }
+
+    function renderEmailAccounts() {
+      renderRunEmailAccountOptions();
+      const container = document.getElementById('emailAccountsBody');
+      document.getElementById('emailAccountCount').textContent = emailAccounts.length;
+      container.innerHTML = emailAccounts.map((acc, i) => `
+        <div class="product-card" style="cursor:default">
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px">
+            <div class="form-group" style="margin-bottom:0">
+              <label>Gmail 주소 #${acc.id}</label>
+              <input type="text" value="${esc(acc.email)}" onchange="emailAccounts[${i}].email=this.value;renderRunEmailAccountOptions()">
+            </div>
+            <div class="form-group" style="margin-bottom:0">
+              <label>앱 비밀번호</label>
+              <input type="password" value="${esc(acc.appPassword)}" onchange="emailAccounts[${i}].appPassword=this.value">
+            </div>
+            <div class="form-group" style="margin-bottom:0">
+              <label>표시 이름 (선택)</label>
+              <input type="text" value="${esc(acc.senderName || '')}" onchange="emailAccounts[${i}].senderName=this.value;renderRunEmailAccountOptions()" placeholder="예: 언엑스">
+            </div>
+          </div>
+          <div class="form-group">
+            <label>서명 텍스트 (선택) — HTML 또는 일반 텍스트</label>
+            <textarea rows="4" onchange="emailAccounts[${i}].signature=this.value" placeholder="예시:&#10;경현 / 언엑스&#10;010-0000-0000&#10;https://undefiance.com">${esc(acc.signature || '')}</textarea>
+          </div>
+          <div class="form-group">
+            <label>서명 이미지 (명함 등 · 선택)</label>
+            <div class="photo-grid">
+              ${acc.signatureImage ? `
+                <div style="position:relative">
+                  <img class="photo-thumb" style="width:auto;max-width:240px;height:auto" src="/assets/${acc.signatureImage.split('/').pop()}" onerror="this.style.display='none'">
+                  <button style="position:absolute;top:-4px;right:-4px;background:#ef4444;color:white;border:none;border-radius:50%;width:18px;height:18px;font-size:10px;cursor:pointer" onclick="removeSignatureImage(${i})">X</button>
+                </div>
+              ` : `
+                <label class="photo-upload-btn" style="width:120px">
+                  + 명함 업로드
+                  <input type="file" accept="image/*" style="display:none" onchange="uploadSignatureImage(${i}, this.files)">
+                </label>
+              `}
+            </div>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <button class="btn btn-outline btn-sm" onclick="verifyEmailAccount(${acc.id})">연결 테스트</button>
+            <span id="emailVerify-${acc.id}" style="font-size:12px;flex:1;margin:0 12px"></span>
+            <button class="btn btn-danger btn-sm" onclick="removeEmailAccount(${i})">삭제</button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function addEmailAccount() {
+      const nextId = emailAccounts.length > 0 ? Math.max(...emailAccounts.map(a => a.id)) + 1 : 1;
+      emailAccounts.push({ id: nextId, email: '', appPassword: '', senderName: '', signature: '' });
+      renderEmailAccounts();
+    }
+
+    function removeEmailAccount(i) {
+      if (!confirm('이 이메일 계정을 삭제하시겠습니까?')) return;
+      emailAccounts.splice(i, 1);
+      renderEmailAccounts();
+    }
+
+    async function saveEmailAccounts() {
+      await fetch('/api/emailAccounts', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(emailAccounts) });
+      alert('이메일 계정 정보가 저장되었습니다.');
+      loadEmailAccounts();
+    }
+
+    async function verifyEmailAccount(id) {
+      // 저장 먼저 (현재 입력값 반영)
+      await fetch('/api/emailAccounts', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(emailAccounts) });
+      const el = document.getElementById('emailVerify-' + id);
+      el.textContent = '확인 중...';
+      el.style.color = '#6b7280';
+      try {
+        const res = await fetch('/api/emailAccounts/verify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
+        const data = await res.json();
+        if (res.ok) {
+          el.textContent = '✓ 성공';
+          el.style.color = '#10b981';
+        } else {
+          el.textContent = '✗ ' + (data.error || '실패');
+          el.style.color = '#ef4444';
+        }
+      } catch (e) {
+        el.textContent = '✗ ' + e.message;
+        el.style.color = '#ef4444';
+      }
+    }
+
+    // 이미지 리사이즈 (가로 maxWidth로 축소, JPEG 압축)
+    function resizeImage(file, maxWidth = 600, quality = 0.85) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        const reader = new FileReader();
+        reader.onload = e => { img.src = e.target.result; };
+        reader.onerror = reject;
+        img.onload = () => {
+          const ratio = Math.min(1, maxWidth / img.width);
+          const w = Math.round(img.width * ratio);
+          const h = Math.round(img.height * ratio);
+          const canvas = document.createElement('canvas');
+          canvas.width = w; canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          // 투명 PNG는 흰 배경으로 (JPEG는 투명도 없음)
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, w, h);
+          ctx.drawImage(img, 0, 0, w, h);
+          canvas.toBlob(blob => {
+            if (!blob) return reject(new Error('blob 생성 실패'));
+            const baseName = file.name.replace(/\.[^.]+$/, '');
+            resolve(new File([blob], baseName + '.jpg', { type: 'image/jpeg' }));
+          }, 'image/jpeg', quality);
+        };
+        img.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+
+    async function uploadSignatureImage(i, files) {
+      if (!files || !files[0]) return;
+      const original = files[0];
+      let toUpload;
+      try {
+        toUpload = await resizeImage(original, 600, 0.85);
+        console.log(`서명 이미지 리사이즈: ${(original.size/1024).toFixed(0)}KB → ${(toUpload.size/1024).toFixed(0)}KB`);
+      } catch (e) {
+        console.warn('리사이즈 실패, 원본 업로드:', e.message);
+        toUpload = original;
+      }
+      const formData = new FormData();
+      formData.append('photos', toUpload);
+      const res = await fetch('/api/products/upload', { method: 'POST', body: formData });
+      const data = await res.json();
+      if (data.files && data.files[0]) {
+        emailAccounts[i].signatureImage = data.files[0];
+        await fetch('/api/emailAccounts', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(emailAccounts) });
+        renderEmailAccounts();
+      }
+    }
+
+    async function removeSignatureImage(i) {
+      delete emailAccounts[i].signatureImage;
+      await fetch('/api/emailAccounts', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(emailAccounts) });
+      renderEmailAccounts();
+    }
+
+    function renderRunEmailAccountOptions() {
+      const sel = document.getElementById('runEmailAccount');
+      if (!sel) return;
+      const prev = sel.value;
+      sel.innerHTML = '<option value="">(선택 안 함)</option>' +
+        emailAccounts.map(a => `<option value="${a.id}">${esc(a.email)}${a.senderName ? ' · ' + esc(a.senderName) : ''}</option>`).join('');
+      if (prev) sel.value = prev;
+      else if (emailAccounts.length > 0) sel.value = String(emailAccounts[0].id);
+    }
+
+    // ═══════════════════════════════════════
     //  제품 관리
     // ═══════════════════════════════════════
     async function loadProducts() {
@@ -464,6 +648,10 @@
               </div>
             </div>
             <div class="form-group">
+              <label>메일 제목 (선택 · 비우면 "[언엑스 공동구매] ${esc(p.name)} 공동구매 제안 건")</label>
+              <input type="text" value="${esc(p.mailSubject || '')}" onchange="products[${i}].mailSubject=this.value" onclick="event.stopPropagation()" placeholder="비워두면 기본 제목 사용">
+            </div>
+            <div class="form-group">
               <label>제품 특징 (USP)</label>
               <textarea rows="3" onchange="products[${i}].usp=this.value" onclick="event.stopPropagation()">${esc(p.usp)}</textarea>
             </div>
@@ -508,6 +696,7 @@
         productName: '',
         campaignType: '공동구매',
         category: '육아·키즈',
+        mailSubject: '',
         usp: '',
         offerMessage: '',
         photos: []
@@ -530,7 +719,17 @@
 
     async function uploadPhotos(productIdx, files) {
       const formData = new FormData();
-      for (const f of files) formData.append('photos', f);
+      for (const f of files) {
+        let toUpload;
+        try {
+          toUpload = await resizeImage(f, 600, 0.85);
+          console.log(`제품 사진 리사이즈: ${f.name} ${(f.size/1024).toFixed(0)}KB → ${(toUpload.size/1024).toFixed(0)}KB`);
+        } catch (e) {
+          console.warn(`리사이즈 실패 (${f.name}), 원본 업로드:`, e.message);
+          toUpload = f;
+        }
+        formData.append('photos', toUpload);
+      }
       const res = await fetch('/api/products/upload', { method: 'POST', body: formData });
       const data = await res.json();
       products[productIdx].photos = [...(products[productIdx].photos || []), ...data.files];
@@ -651,6 +850,12 @@
     }
 
     async function startMacro(dryRun) {
+      const hasEmailTarget = influencers.some(i => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((i.profileUrl || '').trim()));
+      const emailAccountId = document.getElementById('runEmailAccount').value;
+      if (hasEmailTarget && !emailAccountId) {
+        alert('이메일 주소가 포함되어 있습니다. 상단 "메일 발송 계정"을 먼저 선택해주세요.');
+        return;
+      }
       if (!confirm(dryRun ? '테스트 실행(DRY-RUN)을 시작하시겠습니까?' : '제안서 발송을 시작하시겠습니까?')) return;
 
       // 먼저 인플루언서 저장
@@ -659,7 +864,7 @@
       const res = await fetch('/api/macro/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dryRun })
+        body: JSON.stringify({ dryRun, emailAccountId: emailAccountId || undefined })
       });
       const data = await res.json();
       if (!res.ok) { alert(data.error); return; }
@@ -833,6 +1038,7 @@
     //  초기 로드
     // ═══════════════════════════════════════
     loadAccounts();
+    loadEmailAccounts();
     loadProducts();
     loadInfluencers();
     loadRunStats();
