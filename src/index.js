@@ -1,7 +1,7 @@
 const { chromium } = require('playwright');
 const config = require('../config');
 const accountManager = require('./accountManager');
-const { readInfluencersAuto, filterAlreadySent } = require('./influencerReader');
+const { readInfluencersAuto } = require('./influencerReader');
 const { login, logout } = require('./auth');
 const { sendProposal } = require('./proposal');
 const { logSent } = require('./logger');
@@ -18,7 +18,6 @@ async function main() {
 
   // 1. 인플루언서 목록 로드
   let influencers = readInfluencersAuto();
-  influencers = filterAlreadySent(influencers);
 
   if (influencers.length === 0) {
     console.log('[완료] 발송할 인플루언서가 없습니다.');

@@ -222,10 +222,16 @@ app.post('/api/replies/check', (req, res) => {
 
 app.post('/api/replies/stop', (req, res) => {
   if (!replyProcess) return res.status(400).json({ error: '실행 중이 아닙니다.' });
-  replyProcess.kill('SIGTERM');
-  replyProcess = null;
-  replyLogs.push('[중단] 사용자에 의해 중단됨');
-  res.json({ ok: true });
+  const force = !!(req.body && req.body.force);
+  const signal = force ? 'SIGKILL' : 'SIGTERM';
+  replyProcess.kill(signal);
+  if (force) {
+    replyProcess = null;
+    replyLogs.push('[강제 종료] 사용자에 의해 강제 종료됨');
+  } else {
+    replyLogs.push('[중단] 사용자에 의해 중단됨');
+  }
+  res.json({ ok: true, force });
 });
 
 app.get('/api/replies/status', (req, res) => {
@@ -237,8 +243,8 @@ app.get('/api/replies/status', (req, res) => {
   res.json({ running: replyProcess !== null, logs: replyLogs, results });
 });
 
-// ─── 매일 오전 9시, 오후 12시 자동 답장확인 ───
-cron.schedule('0 9,12 * * *', () => {
+// ─── 매일 오전,오후 총 4번 자동 답장확인 ───
+cron.schedule('30 8,10,12,14 * * *', () => {
   if (replyProcess || macroProcess) {
     console.log('[크론] 답장확인 건너뜀 - 다른 프로세스 실행 중');
     return;
@@ -267,5 +273,5 @@ cron.schedule('0 9,12 * * *', () => {
 app.listen(PORT, () => {
   console.log(`\n  인포크링크 매크로 관리 UI`);
   console.log(`  http://localhost:${PORT}`);
-  console.log(`  [크론] 매일 오전 9시, 오후 12시 자동 답장확인 활성화\n`);
+  console.log(`  [크론] 매일 일일 총 4번 자동 답장확인 활성화\n`);
 });

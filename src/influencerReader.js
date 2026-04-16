@@ -46,32 +46,6 @@ function readInfluencers(filePath) {
 }
 
 /**
- * 이미 발송 완료된 인플루언서 필터링 (sent.log 기준)
- */
-function filterAlreadySent(influencers) {
-  const logPath = config.PATHS.sentLog;
-  if (!fs.existsSync(logPath)) return influencers;
-
-  const logContent = fs.readFileSync(logPath, 'utf-8');
-  const sentUrls = new Set();
-  for (const line of logContent.split('\n')) {
-    if (!line.trim()) continue;
-    // 로그 형식: timestamp,accountId,nickname,profileUrl,productName
-    const parts = line.split(',');
-    if (parts.length >= 4) {
-      sentUrls.add(parts[3]);
-    }
-  }
-
-  const filtered = influencers.filter(inf => !sentUrls.has(inf.profileUrl));
-  const skipped = influencers.length - filtered.length;
-  if (skipped > 0) {
-    console.log(`[인플루언서] 이미 발송 완료 ${skipped}명 건너뜀 → 남은 ${filtered.length}명`);
-  }
-  return filtered;
-}
-
-/**
  * JSON 또는 CSV에서 자동으로 인플루언서 목록 로드
  * - influencers.json이 있고 비어있지 않으면 JSON 우선
  * - 없으면 influencers.csv fallback
@@ -89,4 +63,4 @@ function readInfluencersAuto() {
   return readInfluencers();
 }
 
-module.exports = { readInfluencers, readInfluencersAuto, filterAlreadySent };
+module.exports = { readInfluencers, readInfluencersAuto };
