@@ -286,7 +286,7 @@ app.get('/api/replies/status', (req, res) => {
 });
 
 // ─── 매일 오전,오후 총 4번 자동 답장확인 ───
-cron.schedule('30 8,10,12,14 * * *', () => {
+cron.schedule('30 8,10,12,14 * * 1-5', () => {
   if (replyProcess || macroProcess) {
     console.log('[크론] 답장확인 건너뜀 - 다른 프로세스 실행 중');
     return;

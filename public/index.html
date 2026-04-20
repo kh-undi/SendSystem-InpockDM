@@ -665,7 +665,7 @@
               <textarea rows="3" onchange="products[${i}].usp=this.value" onclick="event.stopPropagation()">${esc(p.usp)}</textarea>
             </div>
             <div class="form-group">
-              <label>제안 내용</label>
+              <label>제안 / 메일 내용</label>
               <textarea rows="4" onchange="products[${i}].offerMessage=this.value" onclick="event.stopPropagation()">${esc(p.offerMessage)}</textarea>
             </div>
             <div class="form-group">
@@ -1019,7 +1019,7 @@
         }).join('');
         const total = data.results.results.reduce((s, r) => s + (r.replyCount || 0), 0);
         document.getElementById('repliesResult').innerHTML = `
-          <div style="margin-bottom:12px;font-size:14px;color:#6b7280">확인 시각: ${esc(data.results.checkedAt)} · 총 답장 <strong style="color:#6366f1">${total}건</strong></div>
+          <div style="margin-bottom:12px;font-size:14px;color:#6b7280">확인 시각: ${fmtKst(data.results.checkedAt)} · 총 답장 <strong style="color:#6366f1">${total}건</strong></div>
           <table><thead><tr><th>계정</th><th>결과</th></tr></thead><tbody>${rows}</tbody></table>
         `;
       }
@@ -1042,6 +1042,16 @@
     //  유틸
     // ═══════════════════════════════════════
     function esc(s) { return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+    // [요청] ISO(UTC) 문자열을 한국시간(KST) 로 읽기 쉽게 표시
+    function fmtKst(iso) {
+      if (!iso) return '';
+      const d = new Date(iso);
+      if (isNaN(d)) return esc(iso);
+      const s = d.toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', hour12: false,
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      return esc(s) + ' <span style="color:#9ca3af">KST</span>';
+    }
 
     // ═══════════════════════════════════════
     //  초기 로드
