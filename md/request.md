@@ -5,8 +5,28 @@
 5. 수행한 실행계획 내용은 지운다. 
 
 [ 요청사항 ]
+## 외부 접속 가능하도록 배포
+외부에서도 접속하고 인포크/메일 등 발송 가능하도록
 
 [ 실행계획 ]
+## 외부 접속 가능하도록 배포
+
+### 1단계: Express 서버에 비밀번호 인증 추가
+- `settings.json`에 `adminPassword` 필드 추가 (UI에서 변경 가능)
+- 세션 기반 로그인 미들웨어 추가 (express-session)
+- `/login` 페이지 + `/api/login` 엔드포인트 추가
+- 정적 파일(`public/`) 및 모든 API를 인증 미들웨어 뒤에 배치
+- 로그인 페이지는 인증 없이 접근 가능
+
+### 2단계: cloudflared 터널 설정 가이드
+- cloudflared 설치 방법 안내 (winget 또는 직접 다운로드)
+- `cloudflared tunnel --url http://localhost:3000` 명령으로 즉시 외부 URL 생성
+- 고정 도메인 원하면 Cloudflare 계정 연동 방법 안내
+- npm script에 `npm run tunnel` 추가
+
+### 3단계: 외부 환경 대응 설정
+- `config.js`의 `HEADLESS`를 settings.json에서 제어 가능하도록 (외부 접속 시 headless 모드 필요할 수 있음)
+- PORT를 환경변수로 받을 수 있도록 (`process.env.PORT || 3000`)
 
 [ 작업완료 ]
 ## 답장확인 - 로그인 실패시
