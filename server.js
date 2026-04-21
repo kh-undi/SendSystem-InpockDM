@@ -28,6 +28,27 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
+// ─── 설정 API ─── [요청] 참조자 이메일 등 런타임 설정
+const SETTINGS_PATH = path.join(__dirname, 'settings.json');
+function readSettings() {
+  try { return JSON.parse(fs.readFileSync(SETTINGS_PATH, 'utf-8')); }
+  catch { return {}; }
+}
+function writeSettings(data) {
+  fs.writeFileSync(SETTINGS_PATH, JSON.stringify(data, null, 2), 'utf-8');
+}
+
+app.get('/api/settings', (req, res) => {
+  res.json(readSettings());
+});
+
+app.put('/api/settings', (req, res) => {
+  const current = readSettings();
+  const updated = { ...current, ...req.body };
+  writeSettings(updated);
+  res.json(updated);
+});
+
 // ─── 계정 API ───
 app.get('/api/accounts', (req, res) => {
   const accounts = JSON.parse(fs.readFileSync(config.PATHS.accounts, 'utf-8'));

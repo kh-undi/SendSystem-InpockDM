@@ -1,4 +1,13 @@
 const path = require('path');
+const fs = require('fs');
+
+// [요청] settings.json에서 런타임 설정 로드 (UI에서 변경 가능)
+const SETTINGS_PATH = path.resolve(__dirname, 'settings.json');
+function loadSettings() {
+  try {
+    return JSON.parse(fs.readFileSync(SETTINGS_PATH, 'utf-8'));
+  } catch { return {}; }
+}
 
 module.exports = {
   // 계정당 주간 발송 제한
@@ -32,5 +41,6 @@ module.exports = {
 
   MAIL_SUBJECT_PREFIX: '[언엑스 공동구매]',
   MAIL_SUBJECT_SUFFIX: '공동구매 제안 건',
-  MAIL_BCC: 'kh.park@undefiancecorp.com',
+  // [요청] UI 설정에서 참조자 이메일 변경 가능
+  get MAIL_BCC() { return loadSettings().mailBcc || 'ym.jung@undefiancecorp.com'; },
 };

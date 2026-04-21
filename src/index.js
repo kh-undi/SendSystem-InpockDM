@@ -48,13 +48,22 @@ async function main() {
   let totalSent = 0;
   let totalFailed = 0;
 
+  // [요청] 실패 건 발생 즉시 failed.json에 기록 (UI 실시간 표시용)
+  const failedPath = path.join(__dirname, '..', 'failed.json');
+  // 시작 시 이전 실패 목록 초기화
+  fs.writeFileSync(failedPath, '[]', 'utf-8');
+  function appendFailed(item) {
+    failedList.push(item);
+    fs.writeFileSync(failedPath, JSON.stringify(failedList, null, 2), 'utf-8');
+  }
+
   // ── 3-1. 이메일 타겟 먼저 발송 ──
   if (emailTargets.length > 0) {
     const emailAccount = findEmailAccount(EMAIL_ACCOUNT_ID);
     if (!emailAccount) {
       console.error('[오류] 이메일 타겟이 있으나 Gmail 계정이 설정되지 않았습니다.');
       for (const t of emailTargets) {
-        failedList.push({ ...t, error: 'Gmail 계정 미선택' });
+        appendFailed({ ...t, error: 'Gmail 계정 미선택' });
         totalFailed++;
       }
     } else {
@@ -72,7 +81,7 @@ async function main() {
           logSent(`mail:${emailAccount.id}`, inf);
         } else {
           totalFailed++;
-          failedList.push({ ...inf, error: result.error });
+          appendFailed({ ...inf, error: result.error });
         }
         // 메일 간 약간의 간격 (Gmail 속도 제한 회피)
         await new Promise(r => setTimeout(r, 1500));
@@ -153,7 +162,7 @@ async function main() {
           console.log(`  → 진행: ${totalSent}/${influencers.length} 완료 (이 계정: ${sentThisAccount}/${remaining})`);
         } else {
           totalFailed++;
-          failedList.push({ ...influencer, error: result.error });
+          appendFailed({ ...influencer, error: result.error });
         }
 
         await page.waitForTimeout(config.ACTION_DELAY);
@@ -180,16 +189,13 @@ function finalize(totalSent, totalFailed, accountsUsed, queue, failedList) {
   console.log(`  사용 인포크 계정: ${accountsUsed}개`);
   console.log('========================================');
 
+  // [요청] failed.json은 실패 발생 시 즉시 기록됨 (appendFailed)
   if (failedList.length > 0) {
     console.log('\n[실패 목록]');
     for (const f of failedList) {
       console.log(`  - ${f.nickname} | ${f.profileUrl} | ${f.productName} | 사유: ${f.error}`);
     }
-
-    const failedPath = path.join(__dirname, '..', 'failed.json');
-    fs.writeFileSync(failedPath, JSON.stringify(failedList, null, 2), 'utf-8');
-    console.log(`\n[실패 목록 저장] ${failedPath}`);
-    console.log('  → 재발송 시 이 목록을 인플루언서 탭에 붙여넣기 하세요.');
+    console.log('  → 재발송 시 실패 목록의 "재발송 등록" 버튼을 사용하세요.');
   }
 }
 
