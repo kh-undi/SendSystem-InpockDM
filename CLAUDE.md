@@ -113,7 +113,6 @@ UI에서 "발송 시작"을 누르면 [server.js](server.js)가 `node src/index.
 - `emailAccounts.json`: `{id, email, appPassword, senderName, signature, signatureImage}`
 - `products.json`: `{products: [{name, brandName, productName, campaignType, category, usp, offerMessage, photos[], mailSubject?}]}`
 - `influencers.json` / `failed.json`: `{nickname, profileUrl, productName, [error]}`
-- `logs/sent.log`: CSV(`timestamp,accountId,nickname,profileUrl,productName`)
 - `replies.json`: `{checkedAt, partial, results[]}`
 
 ### 설정 파일 (양쪽 모드 공통)

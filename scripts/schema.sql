@@ -95,13 +95,14 @@ create index if not exists idx_product_photos_product
 --    기존 influencers.json / failed.json 을 하나의 테이블로 합침.
 --    status: pending(대기) / sent(완료) / failed(실패) / skipped('x' URL 등)
 ------------------------------------------------------------
+-- [요청] 발송 중 크래시 대비 — 'sending' 중간 상태 추가
 create table if not exists influencers (
   id            serial      primary key,
   nickname      text        not null,
   profile_url   text        not null,
   product_name  text        not null,
   status        text        not null default 'pending'
-                check (status in ('pending','sent','failed','skipped')),
+                check (status in ('pending','sent','failed','skipped','sending')),
   error         text,
   sent_at       timestamptz,
   created_at    timestamptz not null default now(),
@@ -110,8 +111,15 @@ create table if not exists influencers (
 
 create index if not exists idx_influencers_status on influencers(status);
 
+-- [요청] 발송 중 크래시 대비 — 기존 테이블용 마이그레이션
+--   이미 배포된 DB는 위의 create table if not exists가 no-op이므로,
+--   아래 ALTER를 SQL Editor에서 한 번 실행해야 'sending' 상태가 허용됨.
+alter table influencers drop constraint if exists influencers_status_check;
+alter table influencers add constraint influencers_status_check
+  check (status in ('pending','sent','failed','skipped','sending'));
+
 ------------------------------------------------------------
--- 7. sent_log : 감사 로그 (append-only). logs/sent.log 대체
+-- 7. sent_log : 감사 로그 (append-only)
 ------------------------------------------------------------
 create table if not exists sent_log (
   id            bigserial   primary key,

@@ -82,6 +82,8 @@ async function main() {
           totalSent++;
           continue;
         }
+        // [요청] 발송 중 크래시 대비 — send 전 sending 상태로 전이
+        await influencersRepo.markSending(inf);
         const result = await sendMail(emailAccount, inf, product);
         if (result.success) {
           totalSent++;
@@ -159,6 +161,8 @@ async function main() {
         const influencer = queue.shift();
         const product = productMap.get(influencer.productName);
 
+        // [요청] 발송 중 크래시 대비 — send 전 sending 상태로 전이 (DRY_RUN 제외)
+        if (!DRY_RUN) await influencersRepo.markSending(influencer);
         const result = await sendProposal(page, influencer, product, DRY_RUN, account.username);
 
         if (result.success) {

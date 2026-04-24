@@ -291,6 +291,33 @@ app.post('/api/failed/retry', async (req, res) => {
   }
 });
 
+// [요청] 발송 중 크래시 대비 — sending 상태 확인/해결 API
+app.get('/api/influencers/sending', async (req, res) => {
+  try {
+    res.json(await influencersRepo.listSending());
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/influencers/:id/resolve', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isFinite(id)) return res.status(400).json({ error: 'invalid id' });
+    const { action } = req.body || {};
+    if (action === 'sent') {
+      await influencersRepo.resolveSendingAsSent(id);
+    } else if (action === 'requeue') {
+      await influencersRepo.resolveSendingAsPending(id);
+    } else {
+      return res.status(400).json({ error: 'action은 sent 또는 requeue여야 합니다.' });
+    }
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ─── 매크로 실행 API ───
 let macroProcess = null;
 let macroLogs = [];

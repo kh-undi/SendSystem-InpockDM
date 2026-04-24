@@ -39,7 +39,6 @@ module.exports = {
     emailAccounts: path.resolve(__dirname, 'emailAccounts.json'),
     products: path.resolve(__dirname, 'products.json'),
     influencers: path.resolve(__dirname, 'influencers.csv'),
-    sentLog: path.resolve(__dirname, 'logs/sent.log'),
     logs: path.resolve(__dirname, 'logs'),
     screenshots: path.resolve(__dirname, 'screenshots'),
   },

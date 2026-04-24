@@ -24,7 +24,6 @@
       "Bash(node -c c:/proj/SendSystem-InpockDM/src/repo/influencersRepo.js)",
       "Bash(node -c c:/proj/SendSystem-InpockDM/src/logger.js)",
       "Bash(node -c c:/proj/SendSystem-InpockDM/src/repo/sentLogRepo.js)",
-      "Bash(node c:/proj/SendSystem-InpockDM/scripts/testSentLogRepo.js)",
       "Bash(node -c c:/proj/SendSystem-InpockDM/src/emailSender.js)",
       "Bash(node -c c:/proj/SendSystem-InpockDM/src/repo/emailAccountsRepo.js)",
       "Bash(node c:/proj/SendSystem-InpockDM/scripts/testEmailAccountsRepo.js)",
@@ -54,7 +53,8 @@
       "Bash(node -e \"const j = require\\('c:/proj/SendSystem-InpockDM/public/login.html'.replace\\(/\\\\.html$/, ''\\)\\)\")",
       "Bash(node -c server.js)",
       "Bash(node -c src/index.js)",
-      "Bash(node -c src/repo/influencersRepo.js)"
+      "Bash(node -c src/repo/influencersRepo.js)",
+      "Bash(node --check src/repo/influencersRepo.js)"
     ]
   }
 }

@@ -5,8 +5,3 @@ npm run ui
 & "C:\Users\82109\AppData\Local\Microsoft\WinGet\Packages\Ngrok.Ngrok_Microsoft.Winget.Source_8wekyb3d8bbwe\ngrok.exe" http --domain=shimmy-defame-unifier.ngrok-free.dev 3000
 
 
-
-
-(terminal)
-cloudflared tunnel --url http://localhost:3000
-

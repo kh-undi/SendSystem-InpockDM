@@ -219,49 +219,7 @@ async function migrateSettings() {
   return rows.length;
 }
 
-async function migrateSentLog(accountIdMap) {
-  const logPath = path.join(ROOT, 'logs', 'sent.log');
-  if (!fs.existsSync(logPath)) {
-    console.log('[sent_log] 파일 없음, 건너뜀');
-    return 0;
-  }
-  const lines = fs.readFileSync(logPath, 'utf-8').split(/\r?\n/).filter(Boolean);
-  if (!lines.length) return 0;
-
-  const rows = [];
-  for (const line of lines) {
-    // CSV: timestamp,accountId,nickname,profileUrl,productName
-    // 마지막 productName에 쉼표 섞일 수 있어 5번째부터 끝까지 join
-    const parts = line.split(',');
-    if (parts.length < 5) continue;
-    const ts = parts[0];
-    const accId = parts[1];
-    const nick = parts[2];
-    const url = parts[3];
-    const productName = parts.slice(4).join(',');
-    const jsonAccountId = parseInt(accId, 10);
-    const dbAccountId = accountIdMap[jsonAccountId] != null ? accountIdMap[jsonAccountId] : null;
-    rows.push({
-      account_id: dbAccountId,
-      nickname: nick || null,
-      profile_url: url || null,
-      product_name: productName || null,
-      sent_at: ts || null,
-    });
-  }
-  if (!rows.length) return 0;
-
-  const batchSize = 500;
-  let total = 0;
-  for (let i = 0; i < rows.length; i += batchSize) {
-    const batch = rows.slice(i, i + batchSize);
-    const { error } = await supabase.from('sent_log').insert(batch);
-    if (error) throw new Error(`[sent_log] ${error.message}`);
-    total += batch.length;
-  }
-  console.log(`[sent_log] ${total}개`);
-  return total;
-}
+// [요청] sent.log 관련 설정 및 로그 전부 제거 — migrateSentLog 제거 (이미 이관 완료, 재실행 필요 없음)
 
 async function main() {
   requireForce();
@@ -272,13 +230,12 @@ async function main() {
   }
 
   await clearAll();
-  const { idMap: accountIdMap } = await migrateAccounts();
+  await migrateAccounts();
   await migrateEmailAccounts(urlMap);
   await migrateProducts(urlMap);
   await migrateInfluencers();
   await migrateReplies();
   await migrateSettings();
-  await migrateSentLog(accountIdMap);
 
   console.log('\n=== 이관 완료 ===');
 }

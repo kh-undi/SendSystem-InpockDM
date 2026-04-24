@@ -196,6 +196,64 @@ async function requeueFailedSupabase() {
   return { added: ids.length };
 }
 
+// [요청] 발송 중 크래시 대비 — 'sending' 중간 상태
+async function markSendingSupabase(influencer) {
+  if (influencer.id == null) return;
+  const { error } = await supabase.from('influencers')
+    .update({ status: 'sending', updated_at: new Date().toISOString() })
+    .eq('id', influencer.id);
+  if (error) throw error;
+}
+
+async function listSendingSupabase() {
+  const { data, error } = await supabase
+    .from('influencers')
+    .select('id, nickname, profile_url, product_name, updated_at')
+    .eq('status', 'sending')
+    .order('id');
+  if (error) throw error;
+  return (data || []).map(r => ({
+    ...rowToInfluencer(r),
+    updatedAt: r.updated_at,
+  }));
+}
+
+async function resolveSendingAsSentSupabase(id) {
+  const { data: row, error: fetchErr } = await supabase.from('influencers')
+    .select('id, nickname, profile_url, product_name, status')
+    .eq('id', id).single();
+  if (fetchErr) throw fetchErr;
+  if (!row || row.status !== 'sending') {
+    throw new Error('sending 상태 row가 아닙니다.');
+  }
+  // sent_log에 추가 (account_id는 sending 상태만으로는 알 수 없음 → null)
+  const { error: logErr } = await supabase.from('sent_log').insert({
+    account_id: null,
+    nickname: row.nickname || null,
+    profile_url: row.profile_url || null,
+    product_name: row.product_name || null,
+    sent_at: new Date().toISOString(),
+  });
+  if (logErr) throw logErr;
+  const { error: delErr } = await supabase.from('influencers')
+    .delete().eq('id', id);
+  if (delErr) throw delErr;
+}
+
+async function resolveSendingAsPendingSupabase(id) {
+  const { error } = await supabase.from('influencers')
+    .update({ status: 'pending', error: null, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .eq('status', 'sending');
+  if (error) throw error;
+}
+
+// JSON 모드는 이 기능을 지원하지 않음 (긴급 롤백 모드에서는 중단 복구 UI 불필요)
+async function markSendingJson() { /* no-op */ }
+async function listSendingJson() { return []; }
+async function resolveSendingAsSentJson() { throw new Error('JSON 모드에서는 지원하지 않음'); }
+async function resolveSendingAsPendingJson() { throw new Error('JSON 모드에서는 지원하지 않음'); }
+
 // ─── 공용 API ───
 async function listPending() {
   return config.USE_SUPABASE ? listPendingSupabase() : listPendingJson();
@@ -223,9 +281,23 @@ async function clearFailed() {
 async function requeueFailed() {
   return config.USE_SUPABASE ? requeueFailedSupabase() : requeueFailedJson();
 }
+// [요청] 발송 중 크래시 대비 — sending 상태 공용 API
+async function markSending(influencer) {
+  return config.USE_SUPABASE ? markSendingSupabase(influencer) : markSendingJson(influencer);
+}
+async function listSending() {
+  return config.USE_SUPABASE ? listSendingSupabase() : listSendingJson();
+}
+async function resolveSendingAsSent(id) {
+  return config.USE_SUPABASE ? resolveSendingAsSentSupabase(id) : resolveSendingAsSentJson(id);
+}
+async function resolveSendingAsPending(id) {
+  return config.USE_SUPABASE ? resolveSendingAsPendingSupabase(id) : resolveSendingAsPendingJson(id);
+}
 
 module.exports = {
   listPending, listFailed, replaceAllPending,
   resetRunState, markFailed, markSent,
   clearFailed, requeueFailed,
+  markSending, listSending, resolveSendingAsSent, resolveSendingAsPending,
 };
