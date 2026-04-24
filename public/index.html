@@ -150,6 +150,34 @@
         </div>
       </div>
 
+      <!-- [요청] 외부 배포 — 보안·실행 설정 -->
+      <div class="card">
+        <div class="card-title">외부 접속·실행 설정</div>
+        <div class="form-group" style="max-width:460px">
+          <label>관리 UI 비밀번호 — 빈값이면 인증 비활성 (로컬 전용 운영 시)</label>
+          <div style="display:flex;gap:8px">
+            <input type="password" id="settingsAdminPassword" placeholder="새 비밀번호 (변경하지 않으려면 빈 값)" autocomplete="new-password">
+            <button class="btn btn-primary btn-sm" onclick="saveAdminPassword()" style="white-space:nowrap">변경</button>
+          </div>
+          <div style="font-size:12px;color:#94a3b8;margin-top:6px">
+            * 저장하면 기존 세션은 유지되지만, 외부에서 처음 접속하는 사용자는 로그인이 필요합니다.<br>
+            * 비밀번호를 **빈값**으로 저장하면 인증이 꺼집니다.
+          </div>
+        </div>
+        <div class="form-group" style="max-width:460px;margin-top:12px">
+          <label>
+            <input type="checkbox" id="settingsHeadless">
+            Headless 모드로 실행 (외부에서 발송 트리거 시 이 PC에 크롬창을 띄우지 않음)
+          </label>
+          <div style="display:flex;gap:8px;margin-top:6px">
+            <button class="btn btn-primary btn-sm" onclick="saveHeadless()" style="white-space:nowrap">저장</button>
+          </div>
+        </div>
+        <div class="form-group" style="max-width:460px;margin-top:16px">
+          <button class="btn btn-outline btn-sm" onclick="doLogout()" id="logoutBtn" style="display:none">로그아웃</button>
+        </div>
+      </div>
+
       <!-- 이메일 계정 (Gmail 전용) -->
       <div class="card">
         <div class="actions-bar">
@@ -254,6 +282,13 @@
         <div class="form-group" style="max-width:360px">
           <label>메일 발송 계정 (이메일 타겟에 사용)</label>
           <select id="runEmailAccount"></select>
+        </div>
+        <!-- [요청] 메일만 발송 옵션 -->
+        <div class="form-group" style="max-width:360px">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+            <input type="checkbox" id="runMailOnly">
+            메일만 발송 (인포크 스킵)
+          </label>
         </div>
         <div class="log-area" id="logArea">대기 중...\n</div>
       </div>
@@ -873,11 +908,20 @@
     async function startMacro(dryRun) {
       const hasEmailTarget = influencers.some(i => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((i.profileUrl || '').trim()));
       const emailAccountId = document.getElementById('runEmailAccount').value;
+      // [요청] 메일만 발송 옵션
+      const mailOnly = document.getElementById('runMailOnly').checked;
+      if (mailOnly && !hasEmailTarget) {
+        alert('메일만 발송 옵션이 켜져있는데 이메일 타겟이 하나도 없습니다.');
+        return;
+      }
       if (hasEmailTarget && !emailAccountId) {
         alert('이메일 주소가 포함되어 있습니다. 상단 "메일 발송 계정"을 먼저 선택해주세요.');
         return;
       }
-      if (!confirm(dryRun ? '테스트 실행(DRY-RUN)을 시작하시겠습니까?' : '제안서 발송을 시작하시겠습니까?')) return;
+      const confirmMsg = dryRun
+        ? '테스트 실행(DRY-RUN)을 시작하시겠습니까?'
+        : (mailOnly ? '메일만 발송을 시작하시겠습니까? (인포크 스킵)' : '제안서 발송을 시작하시겠습니까?');
+      if (!confirm(confirmMsg)) return;
 
       // 먼저 인플루언서 저장
       await fetch('/api/influencers', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(influencers) });
@@ -885,7 +929,7 @@
       const res = await fetch('/api/macro/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dryRun, emailAccountId: emailAccountId || undefined })
+        body: JSON.stringify({ dryRun, emailAccountId: emailAccountId || undefined, mailOnly })
       });
       const data = await res.json();
       if (!res.ok) { alert(data.error); return; }
@@ -919,6 +963,9 @@
 
       // [요청] 실행 중에도 실패 목록 실시간 표시
       loadFailed();
+      // [요청] 발송한 인플루언서 건바이건 삭제 — 대기 목록/카운트도 실시간 반영
+      loadInfluencers();
+      loadRunStats();
 
       if (!data.running) {
         clearInterval(pollTimer);
@@ -1075,6 +1122,9 @@
       const res = await fetch('/api/settings');
       const data = await res.json();
       document.getElementById('settingsMailBcc').value = data.mailBcc || '';
+      // [요청] 외부 배포 — headless 토글 반영
+      const hd = document.getElementById('settingsHeadless');
+      if (hd) hd.checked = !!data.headless;
     }
 
     async function saveSettings() {
@@ -1083,9 +1133,45 @@
       alert('설정이 저장되었습니다.');
     }
 
+    // [요청] 외부 배포 — 관리자 비밀번호 변경
+    async function saveAdminPassword() {
+      const input = document.getElementById('settingsAdminPassword');
+      const adminPassword = input.value;
+      if (adminPassword === '') {
+        if (!confirm('비밀번호를 빈값으로 저장하면 외부 접속 인증이 꺼집니다. 계속하시겠습니까?')) return;
+      }
+      await fetch('/api/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminPassword }) });
+      input.value = '';
+      alert('비밀번호가 저장되었습니다.');
+      updateLogoutButton();
+    }
+
+    // [요청] 외부 배포 — headless 토글
+    async function saveHeadless() {
+      const headless = document.getElementById('settingsHeadless').checked;
+      await fetch('/api/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ headless }) });
+      alert(`Headless 모드: ${headless ? 'ON' : 'OFF'}. 다음 매크로 실행부터 적용됩니다.`);
+    }
+
+    // [요청] 외부 배포 — 로그아웃
+    async function doLogout() {
+      await fetch('/api/logout', { method: 'POST' });
+      location.href = '/login';
+    }
+
+    async function updateLogoutButton() {
+      try {
+        const r = await fetch('/api/auth/status');
+        const s = await r.json();
+        const btn = document.getElementById('logoutBtn');
+        if (btn) btn.style.display = (s.needsAuth && s.authenticated) ? 'inline-block' : 'none';
+      } catch {}
+    }
+
     // ═══════════════════════════════════════
     //  초기 로드
     // ═══════════════════════════════════════
+    updateLogoutButton();
     loadSettings();
     loadAccounts();
     loadEmailAccounts();

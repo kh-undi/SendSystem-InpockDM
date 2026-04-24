@@ -1,7 +1,9 @@
+// [요청] Supabase 메인 DB 이전 — emailAccountsRepo 경유 + Supabase Storage URL 첨부 지원
 const fs = require('fs');
 const path = require('path');
 const nodemailer = require('nodemailer');
 const config = require('../config');
+const emailAccountsRepo = require('./repo/emailAccountsRepo');
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -9,20 +11,31 @@ function isEmailAddress(value) {
   return typeof value === 'string' && EMAIL_REGEX.test(value.trim());
 }
 
-function loadEmailAccounts() {
-  if (!fs.existsSync(config.PATHS.emailAccounts)) return [];
-  try {
-    return JSON.parse(fs.readFileSync(config.PATHS.emailAccounts, 'utf-8'));
-  } catch {
-    return [];
-  }
+// [요청] photos/signatureImage가 URL일 수 있으므로 분기 처리
+function isUrl(p) {
+  return typeof p === 'string' && /^https?:\/\//i.test(p);
 }
 
-function findEmailAccount(id) {
-  const list = loadEmailAccounts();
-  if (id == null) return list[0] || null;
-  const idNum = Number(id);
-  return list.find(a => a.id === idNum) || null;
+function isAttachable(p) {
+  return !!p && (isUrl(p) || fs.existsSync(p));
+}
+
+function attachmentFilename(p) {
+  if (isUrl(p)) {
+    try {
+      const u = new URL(p);
+      return decodeURIComponent(path.basename(u.pathname));
+    } catch { return 'attachment'; }
+  }
+  return path.basename(p);
+}
+
+async function loadEmailAccounts() {
+  return emailAccountsRepo.list();
+}
+
+async function findEmailAccount(id) {
+  return emailAccountsRepo.findById(id);
 }
 
 function buildSubject(product) {
@@ -49,10 +62,10 @@ function buildSignatureHtml(emailAccount) {
   const sigImage = emailAccount.signatureImage;
   if (!sig && !sigImage) return '';
 
-  // HTML 태그가 이미 있으면 그대로, 아니면 줄바꿈만 변환
   const looksLikeHtml = /<[a-z][\s\S]*>/i.test(sig);
   const textHtml = sig ? (looksLikeHtml ? sig : escapeHtml(sig).replace(/\n/g, '<br>')) : '';
-  const imageHtml = sigImage && fs.existsSync(sigImage)
+  const hasImage = isAttachable(sigImage);
+  const imageHtml = hasImage
     ? `<div style="margin-top:8px"><img src="cid:signatureImg" style="max-width:400px"></div>`
     : '';
 
@@ -64,10 +77,10 @@ function buildSignatureHtml(emailAccount) {
 
 function buildSignatureAttachments(emailAccount) {
   const sigImage = emailAccount.signatureImage;
-  if (!sigImage || !fs.existsSync(sigImage)) return [];
+  if (!isAttachable(sigImage)) return [];
   return [{
-    filename: path.basename(sigImage),
-    path: sigImage,
+    filename: attachmentFilename(sigImage),
+    path: sigImage, // nodemailer는 로컬 경로·HTTPS URL 둘 다 지원
     cid: 'signatureImg',
   }];
 }
@@ -91,10 +104,10 @@ function buildHtmlBody(product, emailAccount) {
 function buildAttachments(product) {
   const photos = Array.isArray(product.photos) ? product.photos : [];
   return photos
-    .filter(p => p && fs.existsSync(p))
+    .filter(isAttachable)
     .map((p, i) => ({
-      filename: path.basename(p),
-      path: p,
+      filename: attachmentFilename(p),
+      path: p, // 로컬 경로 또는 Supabase Storage public URL
       cid: `photo${i}`,
     }));
 }

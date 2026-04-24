@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>로그인</title>
+  <style>
+    *{box-sizing:border-box}
+    body{margin:0;font-family:'Apple SD Gothic Neo','Malgun Gothic',sans-serif;background:#0f172a;color:#e5e7eb;min-height:100vh;display:flex;align-items:center;justify-content:center}
+    .box{background:#1e293b;padding:32px 28px;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.4);width:320px}
+    h1{margin:0 0 18px;font-size:18px;color:#f1f5f9}
+    label{display:block;font-size:12px;color:#94a3b8;margin-bottom:6px}
+    input[type=password]{width:100%;padding:10px;border-radius:6px;border:1px solid #334155;background:#0f172a;color:#e5e7eb;font-size:14px}
+    input[type=password]:focus{outline:none;border-color:#3b82f6}
+    button{width:100%;margin-top:14px;padding:10px;border:0;border-radius:6px;background:#3b82f6;color:#fff;font-weight:600;cursor:pointer}
+    button:hover{background:#2563eb}
+    .err{margin-top:10px;color:#f87171;font-size:12px;min-height:16px}
+  </style>
+</head>
+<body>
+  <form class="box" onsubmit="return submitLogin(event)">
+    <h1>관리 UI 로그인</h1>
+    <label for="pw">비밀번호</label>
+    <input id="pw" type="password" autocomplete="current-password" autofocus required>
+    <button type="submit">로그인</button>
+    <div class="err" id="err"></div>
+  </form>
+  <script>
+    async function submitLogin(e) {
+      e.preventDefault();
+      const pw = document.getElementById('pw').value;
+      const err = document.getElementById('err');
+      err.textContent = '';
+      try {
+        const r = await fetch('/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: pw }),
+        });
+        if (r.ok) {
+          location.href = '/';
+        } else {
+          err.textContent = '비밀번호가 올바르지 않습니다.';
+        }
+      } catch (ex) {
+        err.textContent = '서버 오류: ' + ex.message;
+      }
+      return false;
+    }
+  </script>
+</body>
+</html>

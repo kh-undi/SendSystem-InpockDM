@@ -10,11 +10,16 @@ function loadSettings() {
 }
 
 module.exports = {
+  // [요청] Supabase 메인 DB 이전 — 현재 Supabase가 메인 DB.
+  // 긴급 롤백 시 `USE_SUPABASE=false npm run ui`로 JSON 모드 복귀 가능.
+  USE_SUPABASE: process.env.USE_SUPABASE !== 'false',
+
   // 계정당 주간 발송 제한
   WEEKLY_LIMIT: 10,
 
   // 브라우저 설정
-  HEADLESS: false,        // true로 바꾸면 브라우저 안 보임
+  // [요청] 외부 배포 대응 — settings.json에서 headless 토글 가능 (외부에서 발송 트리거 시 로컬 크롬창 안 뜨게)
+  get HEADLESS() { return !!loadSettings().headless; },
   SLOW_MO: 300,           // 각 동작 사이 딜레이 (ms)
 
   // 타임아웃

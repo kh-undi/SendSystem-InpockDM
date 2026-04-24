@@ -1,3 +1,5 @@
 {
-  "mailBcc": "ym.jung@undefiancecorp.com"
+  "mailBcc": "ym.jung@undefiancecorp.com",
+  "adminPassword": "djsel1!",
+  "headless": false
 }

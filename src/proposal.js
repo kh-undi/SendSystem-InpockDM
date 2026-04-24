@@ -1,5 +1,71 @@
 const config = require('../config');
 const selectors = require('./selectors');
+// [요청] Supabase 모드에서 product.photos가 HTTPS URL이면
+// Playwright setInputFiles가 처리 못 하므로 로컬 경로로 해석한다.
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
+const https = require('https');
+const http = require('http');
+
+function isUrl(p) {
+  return typeof p === 'string' && /^https?:\/\//i.test(p);
+}
+
+function downloadToTemp(url) {
+  const client = url.startsWith('https') ? https : http;
+  const tmpDir = path.join(os.tmpdir(), 'inpock-photos');
+  if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
+  const u = new URL(url);
+  const basename = path.basename(u.pathname);
+  const localPath = path.join(tmpDir, basename);
+  if (fs.existsSync(localPath) && fs.statSync(localPath).size > 0) {
+    return Promise.resolve(localPath); // 캐시 히트
+  }
+  return new Promise((resolve, reject) => {
+    const file = fs.createWriteStream(localPath);
+    client.get(url, (response) => {
+      if (response.statusCode !== 200) {
+        file.close();
+        fs.unlink(localPath, () => {});
+        return reject(new Error(`HTTP ${response.statusCode} for ${url}`));
+      }
+      response.pipe(file);
+      file.on('finish', () => file.close(() => resolve(localPath)));
+    }).on('error', (err) => {
+      fs.unlink(localPath, () => reject(err));
+    });
+  });
+}
+
+async function resolvePhotosToLocal(photos) {
+  if (!Array.isArray(photos)) return [];
+  const resolved = [];
+  for (const p of photos) {
+    if (!p) continue;
+    if (!isUrl(p)) {
+      if (fs.existsSync(p)) resolved.push(p);
+      continue;
+    }
+    // 빠른 경로: assets/에 같은 basename 파일이 있으면 재다운로드 없이 사용
+    try {
+      const basename = path.basename(new URL(p).pathname);
+      const assetsPath = path.resolve(__dirname, '..', 'assets', basename);
+      if (fs.existsSync(assetsPath)) {
+        resolved.push(assetsPath);
+        continue;
+      }
+    } catch {}
+    // 폴백: 임시 폴더에 다운로드
+    try {
+      const localPath = await downloadToTemp(p);
+      resolved.push(localPath);
+    } catch (e) {
+      console.warn(`[photo] 다운로드 실패 ${p}: ${e.message}`);
+    }
+  }
+  return resolved;
+}
 
 /**
  * 인포크 제안서 발송
@@ -71,13 +137,15 @@ async function sendProposal(page, influencer, product, dryRun = false, accountNa
 
     // ── 2-1: 이미지 첨부 ──
     if (product.photos && product.photos.length > 0) {
+      // [요청] URL이면 로컬로 해석 (assets/ 캐시 or 임시 다운로드)
+      const localPhotos = await resolvePhotosToLocal(product.photos);
       let fileInput = await newPage.$('div[type="campaign"] input[type="file"]');
       if (!fileInput) {
         fileInput = await newPage.$('input[type="file"]');
       }
-      if (fileInput) {
-        await fileInput.setInputFiles(product.photos);
-        console.log(`${label} 이미지 ${product.photos.length}장 업로드`);
+      if (fileInput && localPhotos.length > 0) {
+        await fileInput.setInputFiles(localPhotos);
+        console.log(`${label} 이미지 ${localPhotos.length}장 업로드`);
         await newPage.waitForTimeout(1500);
 
         // "선택" 버튼 클릭

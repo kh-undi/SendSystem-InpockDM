@@ -1,9 +1,10 @@
 const { chromium } = require('playwright');
-const fs = require('fs');
-const path = require('path');
 const config = require('../config');
 const selectors = require('./selectors');
 const { login, logout } = require('./auth');
+// [요청] Supabase 메인 DB 이전 — accounts/replies를 repo 경유로 로드·저장
+const accountsRepo = require('./repo/accountsRepo');
+const repliesRepo = require('./repo/repliesRepo');
 
 /**
  * 각 계정 로그인 후 신규 탭을 열어 sendbird 뱃지(답장 온 메시지) 개수를 카운트
@@ -27,7 +28,6 @@ async function checkRepliesForAccount(context, page, account) {
     return { account: account.username, replyCount: 0, error: '로그인 실패 (재시도 포함)' };
   }
 
-  // 신규 탭 생성
   const newTab = await context.newPage();
   newTab.setDefaultTimeout(config.NAVIGATION_TIMEOUT);
 
@@ -40,7 +40,6 @@ async function checkRepliesForAccount(context, page, account) {
       timeout: config.NAVIGATION_TIMEOUT,
     });
 
-    // 팝업 닫기 (있을 경우)
     try {
       const modalBtn = newTab.getByRole('button', { name: '오늘 그만 보기' });
       await modalBtn.waitFor({ state: 'visible', timeout: 3000 });
@@ -49,7 +48,6 @@ async function checkRepliesForAccount(context, page, account) {
 
     await newTab.waitForTimeout(2000);
 
-    // sendbird 뱃지 개수 = 답장 보낸 사람 수
     const badges = await newTab.$$(selectors.chat.badge);
     replyCount = badges.length;
 
@@ -61,7 +59,6 @@ async function checkRepliesForAccount(context, page, account) {
     await newTab.close().catch(() => {});
   }
 
-  // 로그아웃
   await logout(page, account.username);
 
   return { account: account.username, replyCount, error };
@@ -72,9 +69,8 @@ async function main() {
   console.log('  답장 확인 매크로');
   console.log('========================================');
 
-  let accounts = JSON.parse(
-    fs.readFileSync(path.join(__dirname, '..', 'accounts.json'), 'utf-8')
-  );
+  // [요청] accountsRepo 경유로 계정 로드
+  let accounts = await accountsRepo.list();
 
   // [요청] --start <username> 인자가 있으면 해당 계정부터 순차 처리
   const startIdx = process.argv.indexOf('--start');
@@ -95,17 +91,8 @@ async function main() {
     slowMo: config.SLOW_MO,
   });
 
-  const startedAt = new Date().toISOString();
-  const repliesPath = path.join(__dirname, '..', 'replies.json');
-
-  // [요청] 계정 하나 끝날 때마다 결과 파일을 즉시 갱신해 UI에서 실시간 반영되도록
-  const writeResults = (partial) => {
-    fs.writeFileSync(
-      repliesPath,
-      JSON.stringify({ checkedAt: startedAt, partial, results }, null, 2),
-      'utf-8'
-    );
-  };
+  // [요청] repliesRepo로 run 시작 — JSON 모드에서는 replies.json 초기화, Supabase 모드에서는 reply_runs 신규 row
+  const { runId } = await repliesRepo.startRun();
 
   const context = await browser.newContext({
     viewport: { width: 1280, height: 900 },
@@ -115,16 +102,13 @@ async function main() {
 
   const results = [];
 
-  // 시작 시점에 빈 결과 파일 작성 (이전 결과 클리어)
-  writeResults(true);
-
   try {
     for (const account of accounts) {
       console.log(`\n──── 계정 ${account.id} (${account.username}) ────`);
       const result = await checkRepliesForAccount(context, page, account);
       results.push(result);
-      // [요청] 계정 하나 처리 직후 결과 파일 갱신 → UI 실시간 반영
-      writeResults(true);
+      // [요청] 계정 하나 처리 직후 저장 → UI 실시간 반영
+      await repliesRepo.addResult(runId, result);
     }
   } catch (e) {
     console.error('[치명적 오류]', e.message);
@@ -132,8 +116,8 @@ async function main() {
     await browser.close();
   }
 
-  // 최종 결과 저장 (완료 표시)
-  writeResults(false);
+  // [요청] run 완료 표시
+  await repliesRepo.finishRun(runId);
 
   // 결과 요약
   console.log('\n========================================');

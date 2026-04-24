@@ -1,16 +1,20 @@
 const { chromium } = require('playwright');
 const config = require('../config');
 const accountManager = require('./accountManager');
-const { readInfluencersAuto } = require('./influencerReader');
 const { login, logout } = require('./auth');
 const { sendProposal } = require('./proposal');
 const { logSent } = require('./logger');
 const { isEmailAddress, findEmailAccount, sendMail } = require('./emailSender');
+const productsRepo = require('./repo/productsRepo');
+// [요청] influencersRepo — influencers.json + failed.json을 단일 테이블로 통합
+const influencersRepo = require('./repo/influencersRepo');
 const fs = require('fs');
 const path = require('path');
 
 const DRY_RUN = process.argv.includes('--dry-run');
 const EMAIL_ACCOUNT_ID = process.env.EMAIL_ACCOUNT_ID;
+// [요청] 메일만 발송 옵션 — UI에서 체크 시 서버가 MAIL_ONLY=true 주입
+const MAIL_ONLY = process.env.MAIL_ONLY === 'true';
 
 async function main() {
   console.log('========================================');
@@ -19,7 +23,8 @@ async function main() {
   if (DRY_RUN) console.log('⚠️  DRY-RUN 모드: 실제 제출하지 않습니다.\n');
 
   // 1. 인플루언서 목록 로드
-  let influencers = readInfluencersAuto();
+  // [요청] influencersRepo 경유로 변경 — USE_SUPABASE 플래그에 따라 JSON/Supabase 자동 분기
+  let influencers = await influencersRepo.listPending();
 
   if (influencers.length === 0) {
     console.log('[완료] 발송할 인플루언서가 없습니다.');
@@ -27,8 +32,9 @@ async function main() {
   }
 
   // 2. 제품 정보 로드
-  const productsData = JSON.parse(fs.readFileSync(config.PATHS.products, 'utf-8'));
-  const productMap = new Map(productsData.products.map(p => [p.name, p]));
+  // [요청] productsRepo 경유로 변경 — USE_SUPABASE 플래그에 따라 JSON/Supabase 자동 분기
+  const productsList = await productsRepo.list();
+  const productMap = new Map(productsList.map(p => [p.name, p]));
 
   // 제품명 매칭 검증
   for (const inf of influencers) {
@@ -40,30 +46,31 @@ async function main() {
 
   // 3. 인플루언서를 이메일/인포크로 분리
   const emailTargets = influencers.filter(i => isEmailAddress(i.profileUrl));
-  const inpockTargets = influencers.filter(i => !isEmailAddress(i.profileUrl));
+  // [요청] 메일만 발송 옵션 — MAIL_ONLY면 인포크 타겟 비워서 브라우저 단계 전체 스킵
+  const inpockTargets = MAIL_ONLY ? [] : influencers.filter(i => !isEmailAddress(i.profileUrl));
 
+  if (MAIL_ONLY) console.log('\n[옵션] 메일만 발송 모드 — 인포크 타겟 스킵');
   console.log(`\n[분류] 이메일: ${emailTargets.length}명 / 인포크: ${inpockTargets.length}명`);
 
   const failedList = [];
   let totalSent = 0;
   let totalFailed = 0;
 
-  // [요청] 실패 건 발생 즉시 failed.json에 기록 (UI 실시간 표시용)
-  const failedPath = path.join(__dirname, '..', 'failed.json');
-  // 시작 시 이전 실패 목록 초기화
-  fs.writeFileSync(failedPath, '[]', 'utf-8');
-  function appendFailed(item) {
+  // [요청] 실패 건 발생 즉시 저장 (UI 실시간 표시용)
+  // 시작 시 이전 run 실패 상태 초기화
+  await influencersRepo.resetRunState();
+  async function appendFailed(item) {
     failedList.push(item);
-    fs.writeFileSync(failedPath, JSON.stringify(failedList, null, 2), 'utf-8');
+    await influencersRepo.markFailed(item, item.error);
   }
 
   // ── 3-1. 이메일 타겟 먼저 발송 ──
   if (emailTargets.length > 0) {
-    const emailAccount = findEmailAccount(EMAIL_ACCOUNT_ID);
+    const emailAccount = await findEmailAccount(EMAIL_ACCOUNT_ID);
     if (!emailAccount) {
       console.error('[오류] 이메일 타겟이 있으나 Gmail 계정이 설정되지 않았습니다.');
       for (const t of emailTargets) {
-        appendFailed({ ...t, error: 'Gmail 계정 미선택' });
+        await appendFailed({ ...t, error: 'Gmail 계정 미선택' });
         totalFailed++;
       }
     } else {
@@ -78,10 +85,11 @@ async function main() {
         const result = await sendMail(emailAccount, inf, product);
         if (result.success) {
           totalSent++;
-          logSent(`mail:${emailAccount.id}`, inf);
+          await logSent(`mail:${emailAccount.id}`, inf);
+          await influencersRepo.markSent(inf);
         } else {
           totalFailed++;
-          appendFailed({ ...inf, error: result.error });
+          await appendFailed({ ...inf, error: result.error });
         }
         // 메일 간 약간의 간격 (Gmail 속도 제한 회피)
         await new Promise(r => setTimeout(r, 1500));
@@ -97,7 +105,8 @@ async function main() {
 
   // 4. 계정 상태 확인
   console.log('\n[계정 상태]');
-  const status = accountManager.getStatusSummary();
+  // [요청] accountManager 함수들 async화 → await 필요
+  const status = await accountManager.getStatusSummary();
   for (const s of status) {
     console.log(`  계정 ${s.id} (${s.username}): ${s.sent}/${config.WEEKLY_LIMIT} 발송 (남은: ${s.remaining})`);
   }
@@ -128,7 +137,7 @@ async function main() {
 
   try {
     while (queue.length > 0) {
-      const account = accountManager.getAvailableAccount(loginFailedIds);
+      const account = await accountManager.getAvailableAccount(loginFailedIds);
       if (!account) {
         console.log('\n[중단] 이번 주 모든 계정 한도 소진됨.');
         break;
@@ -155,14 +164,15 @@ async function main() {
         if (result.success) {
           sentThisAccount++;
           if (!DRY_RUN) {
-            accountManager.incrementSendCount(account.id);
-            logSent(account.id, influencer);
+            await accountManager.incrementSendCount(account.id);
+            await logSent(account.id, influencer);
+            await influencersRepo.markSent(influencer);
           }
           totalSent++;
           console.log(`  → 진행: ${totalSent}/${influencers.length} 완료 (이 계정: ${sentThisAccount}/${remaining})`);
         } else {
           totalFailed++;
-          appendFailed({ ...influencer, error: result.error });
+          await appendFailed({ ...influencer, error: result.error });
         }
 
         await page.waitForTimeout(config.ACTION_DELAY);
