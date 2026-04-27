@@ -9,6 +9,17 @@
 [ 실행계획 ]
 
 [ 작업완료 ]
+## 다중 PC 접속 시 매크로 실행 상태 동기화
+한쪽 PC에서 매크로 실행 중일 때 다른 PC에서 접속해도 UI가 동일하게 보이도록 수정.
+- [public/index.html](public/index.html) `syncMacroRunning()` 함수 추가 — `/api/macro/status` GET → `running===true`이면 `btnStart`/`btnDryRun` 숨김, `btnStop` 노출, `headerStatus` "발송 중", `pollTimer = setInterval(pollStatus, 1000)` + 즉시 `pollStatus()` 1회 호출.
+- 초기 로드 섹션에서 `syncMacroRunning()` 호출 추가.
+- 서버 코드 변경 없음 — `macroProcess`는 이미 단일 source of truth였고, 클라이언트가 그 상태를 안 가져오던 것이 원인.
+## 확인필요 카드 — in-flight sending row 오표시 수정
+매크로 실행 중 정상 처리 중인 row(`pending → sending → 성공 시 삭제`)가 카드에 잠깐 떴다 사라지면서 "발송 중 중단된 건"으로 잘못 안내되던 문제 수정.
+- [src/repo/influencersRepo.js](src/repo/influencersRepo.js) `listSendingSupabase(staleSeconds)`: `staleSeconds > 0`이면 `.lt('updated_at', now-staleSeconds)` 적용해 그 시점 이전 row만 반환. 공용 `listSending`도 인자 통과.
+- [server.js](server.js) `GET /api/influencers/sending`: `macroProcess` 활성 시 `staleSeconds=120`, 미활성 시 `0` 전달.
+- JSON 모드 `listSendingJson`은 기존대로 no-op.
+- 결과: 매크로 실행 중에는 sending에 2분 이상 머문 row(=진짜 stuck)만 카드 노출. 매크로 미실행 상태에선 모든 sending row 즉시 노출.
 ## 발송 중 크래시 대비 — `sending` 중간 상태 도입
 send 성공 후 DB write 사이에 크래시가 나면 해당 1건이 중복 발송 후보로 남는 문제. 2단계 상태 전이로 수동 확인 가능하게 함.
 - **스키마**: [scripts/schema.sql](scripts/schema.sql) influencers.status CHECK에 `'sending'` 추가 + 기존 테이블용 ALTER 마이그레이션 블록 포함.
@@ -22,7 +33,6 @@ send 성공 후 DB write 사이에 크래시가 나면 해당 1건이 중복 발
   - 인포크 경로에서 incrementSendCount 이전 크래시 시 주간 카운터 1건 누락(최대 11건/주 가능)
   - DRY_RUN에서는 markSending 미호출
 
-## sent.log 관련 설정 및 로그 전부 제거
 ## sent.log 관련 설정 및 로그 전부 제거
 파일 기반 `logs/sent.log`(JSON 롤백 모드 전용 레거시)를 완전히 제거. Supabase `sent_log` 테이블과 `/api/logs`("누적 발송" 카운트)는 유지.
 - [logs/sent.log](logs/sent.log) 파일 삭제

@@ -205,12 +205,19 @@ async function markSendingSupabase(influencer) {
   if (error) throw error;
 }
 
-async function listSendingSupabase() {
-  const { data, error } = await supabase
+// [요청] 확인필요 카드 — in-flight sending row 오표시 수정
+//   staleSeconds > 0: updated_at이 그만큼 이전인 row만 반환 (in-flight 제외).
+//   매크로 실행 중일 때 server에서 staleSeconds=120 전달해 정상 처리 중인 row를 카드에서 가린다.
+async function listSendingSupabase(staleSeconds = 0) {
+  let query = supabase
     .from('influencers')
     .select('id, nickname, profile_url, product_name, updated_at')
-    .eq('status', 'sending')
-    .order('id');
+    .eq('status', 'sending');
+  if (staleSeconds > 0) {
+    const cutoffIso = new Date(Date.now() - staleSeconds * 1000).toISOString();
+    query = query.lt('updated_at', cutoffIso);
+  }
+  const { data, error } = await query.order('id');
   if (error) throw error;
   return (data || []).map(r => ({
     ...rowToInfluencer(r),
@@ -285,8 +292,8 @@ async function requeueFailed() {
 async function markSending(influencer) {
   return config.USE_SUPABASE ? markSendingSupabase(influencer) : markSendingJson(influencer);
 }
-async function listSending() {
-  return config.USE_SUPABASE ? listSendingSupabase() : listSendingJson();
+async function listSending(staleSeconds = 0) {
+  return config.USE_SUPABASE ? listSendingSupabase(staleSeconds) : listSendingJson();
 }
 async function resolveSendingAsSent(id) {
   return config.USE_SUPABASE ? resolveSendingAsSentSupabase(id) : resolveSendingAsSentJson(id);

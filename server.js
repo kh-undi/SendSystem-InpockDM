@@ -292,9 +292,13 @@ app.post('/api/failed/retry', async (req, res) => {
 });
 
 // [요청] 발송 중 크래시 대비 — sending 상태 확인/해결 API
+// [요청] 확인필요 카드 — in-flight sending row 오표시 수정
+//   매크로 실행 중에는 staleSeconds=120 전달해 최근 2분 이내 update된 row(정상 처리 중)는 제외.
+//   미실행이면 0 → 모든 sending row 노출 (진짜 stuck).
 app.get('/api/influencers/sending', async (req, res) => {
   try {
-    res.json(await influencersRepo.listSending());
+    const staleSeconds = macroProcess ? 120 : 0;
+    res.json(await influencersRepo.listSending(staleSeconds));
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

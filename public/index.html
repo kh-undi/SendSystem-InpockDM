@@ -926,7 +926,6 @@
         <div class="stat-card"><div class="stat-value">${totalSent}</div><div class="stat-label">이번 주 발송</div></div>
         <div class="stat-card"><div class="stat-value">${totalRemaining}</div><div class="stat-label">남은 슬롯</div></div>
         <div class="stat-card"><div class="stat-value">${accs.length}</div><div class="stat-label">총 계정</div></div>
-        <div class="stat-card"><div class="stat-value">${logs.length}</div><div class="stat-label">누적 발송</div></div>
       `;
     }
 
@@ -971,6 +970,23 @@
     async function stopMacro() {
       if (!confirm('매크로를 중지하시겠습니까?')) return;
       await fetch('/api/macro/stop', { method: 'POST' });
+    }
+
+    // [요청] 다중 PC 접속 시 매크로 실행 상태 동기화 — 페이지 진입 시 서버에서 running 가져와 UI 맞춤
+    async function syncMacroRunning() {
+      try {
+        const res = await fetch('/api/macro/status');
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!data.running) return;
+        document.getElementById('btnStart').style.display = 'none';
+        document.getElementById('btnDryRun').style.display = 'none';
+        document.getElementById('btnStop').style.display = '';
+        document.getElementById('headerStatus').textContent = '발송 중';
+        document.getElementById('headerStatus').style.background = 'rgba(16,185,129,0.3)';
+        if (!pollTimer) pollTimer = setInterval(pollStatus, 1000);
+        pollStatus();
+      } catch {}
     }
 
     async function pollStatus() {
@@ -1249,6 +1265,8 @@
     loadFailed();
     // [요청] 발송 중 크래시 대비 — 초기 로드
     loadSending();
+    // [요청] 다중 PC 접속 시 매크로 실행 상태 동기화 — 초기 로드
+    syncMacroRunning();
     pollReplies();
   </script>
 </body>
