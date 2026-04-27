@@ -1,7 +1,7 @@
 1. 요청사항 제목시작을 '## ' 으로 시작함.
 2. 요청사항을 읽고 '실행계획' 영역에 작업할 내용을 추가함. 그 전까지 클로드코드는 작업시작 명령 없이 코드수정을 하지 않음
 3. 작업시작하면 코드에 작업내용 주석추가
-4. 요청사항 작업이 끝나면 '요청사항' 내용을 '작업완료' 상단으로 이동시킨다. 
+4. 요청사항 작업이 끝나면 '요청사항' 내용을 '작업완료' 상단으로 이동시킨다. 수정내용 제목 맨 뒤에 날짜(yy.mm.dd) 기재
 5. 수행한 실행계획 내용은 지운다. 
 
 [ 요청사항 ]
@@ -9,12 +9,12 @@
 [ 실행계획 ]
 
 [ 작업완료 ]
-## 다중 PC 접속 시 매크로 실행 상태 동기화
+## 다중 PC 접속 시 매크로 실행 상태 동기화 (26.04.27)
 한쪽 PC에서 매크로 실행 중일 때 다른 PC에서 접속해도 UI가 동일하게 보이도록 수정.
 - [public/index.html](public/index.html) `syncMacroRunning()` 함수 추가 — `/api/macro/status` GET → `running===true`이면 `btnStart`/`btnDryRun` 숨김, `btnStop` 노출, `headerStatus` "발송 중", `pollTimer = setInterval(pollStatus, 1000)` + 즉시 `pollStatus()` 1회 호출.
 - 초기 로드 섹션에서 `syncMacroRunning()` 호출 추가.
 - 서버 코드 변경 없음 — `macroProcess`는 이미 단일 source of truth였고, 클라이언트가 그 상태를 안 가져오던 것이 원인.
-## 확인필요 카드 — in-flight sending row 오표시 수정
+## 확인필요 카드 — in-flight sending row 오표시 수정 (26.04.27)
 매크로 실행 중 정상 처리 중인 row(`pending → sending → 성공 시 삭제`)가 카드에 잠깐 떴다 사라지면서 "발송 중 중단된 건"으로 잘못 안내되던 문제 수정.
 - [src/repo/influencersRepo.js](src/repo/influencersRepo.js) `listSendingSupabase(staleSeconds)`: `staleSeconds > 0`이면 `.lt('updated_at', now-staleSeconds)` 적용해 그 시점 이전 row만 반환. 공용 `listSending`도 인자 통과.
 - [server.js](server.js) `GET /api/influencers/sending`: `macroProcess` 활성 시 `staleSeconds=120`, 미활성 시 `0` 전달.
