@@ -79,11 +79,11 @@ UI에서 "발송 시작"을 누르면 [server.js](server.js)가 `node src/index.
 
 ### 로그인/로그아웃 공통 규약
 
-[md/request.md](md/request.md)의 결정사항: 로그인·로그아웃 모두 반드시 캐시 비우기 + 새로고침을 수행한다. [src/auth.js](src/auth.js)가 이미 구현하고 있으니 인증 관련 코드를 만질 때는 이 규약을 깨지 말 것. 로그인 실패 시 새로고침 후 1회 재시도하는 것도 의도된 동작이다.
+[md/ModifyHistory.md](md/ModifyHistory.md)의 결정사항: 로그인·로그아웃 모두 반드시 캐시 비우기 + 새로고침을 수행한다. [src/auth.js](src/auth.js)가 이미 구현하고 있으니 인증 관련 코드를 만질 때는 이 규약을 깨지 말 것. 로그인 실패 시 새로고침 후 1회 재시도하는 것도 의도된 동작이다.
 
-## 작업 진행 프로토콜 — [md/request.md](md/request.md)
+## 작업 진행 프로토콜 — [md/ModifyHistory.md](md/ModifyHistory.md)
 
-이 저장소는 [md/request.md](md/request.md)에 요청사항을 적는 방식으로 협업한다. 규칙(파일 상단에 명시됨):
+이 저장소는 [md/ModifyHistory.md](md/ModifyHistory.md)에 요청사항을 적는 방식으로 협업한다. 규칙(파일 상단에 명시됨):
 
 1. 요청 제목은 `## ` 으로 시작.
 2. `[ 요청사항 ]` 밑에 새 요청이 들어오면 Claude는 먼저 `[ 실행계획 ]`에 계획을 추가만 한다 — **사용자가 "작업시작"이라고 하기 전에는 코드 수정 금지**.
