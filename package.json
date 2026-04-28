@@ -9,6 +9,7 @@
     "dry-run": "node src/index.js --dry-run",
     "reset-counts": "node src/resetCounts.js",
     "check-replies": "node src/checkReplies.js",
+    "cleanup-orphans": "node scripts/cleanupOrphanPhotos.js",
     "tunnel": "cloudflared tunnel --url http://localhost:3000"
   },
   "dependencies": {

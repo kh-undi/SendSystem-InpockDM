@@ -98,6 +98,10 @@
     .product-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
     .product-name { font-size: 16px; font-weight: 700; }
 
+    /* [요청] 미저장 변경사항 표시 — body.products-dirty일 때만 노출 */
+    .dirty-indicator { display: none; color: #f59e0b; font-size: 12px; font-weight: 600; margin-right: 8px; align-self: center; }
+    body.products-dirty .dirty-indicator { display: inline; }
+
     /* 실행 패널 */
     .run-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 20px; }
     .stat-card { background: #f9fafb; border-radius: 10px; padding: 16px; text-align: center; }
@@ -223,7 +227,11 @@
       <div class="card">
         <div class="actions-bar">
           <div class="card-title">제품 목록 <span class="count" id="productCount">0</span></div>
-          <button class="btn btn-outline btn-sm" onclick="addProduct()">+ 제품 추가</button>
+          <div style="display:flex;gap:8px;align-items:center">
+            <!-- [요청] 제품 검색 -->
+            <input type="search" id="productSearch" placeholder="검색 (관리명·브랜드·제품명·카테고리·캠페인)" oninput="onProductSearchChange()" style="width:320px;padding:6px 12px;font-size:13px">
+            <button class="btn btn-outline btn-sm" onclick="addProduct()">+ 제품 추가</button>
+          </div>
         </div>
         <div id="productsList"></div>
       </div>
@@ -679,18 +687,54 @@
       const res = await fetch('/api/products');
       products = await res.json();
       renderProducts();
+      clearProductsDirty(); // [요청] 미저장 표시 — 로드 직후 clean
     }
 
+    // [요청] 미저장 표시 — 전역 dirty 상태
+    function markProductsDirty() { document.body.classList.add('products-dirty'); }
+    function clearProductsDirty() { document.body.classList.remove('products-dirty'); }
+
     let openProductIdx = -1;
+    // [요청] 후킹문구 아코디언 — product index 기반 펼침 상태
+    const hookingOpenIdx = new Set();
+    function toggleHookingOpen(i) {
+      if (hookingOpenIdx.has(i)) hookingOpenIdx.delete(i);
+      else hookingOpenIdx.add(i);
+      renderProducts();
+    }
+
+    // [요청] 제품 검색 — query state + 핸들러
+    let productSearchQuery = '';
+    function onProductSearchChange() {
+      productSearchQuery = document.getElementById('productSearch').value.trim().toLowerCase();
+      renderProducts();
+    }
+    function productMatchesSearch(p) {
+      if (!productSearchQuery) return true;
+      const haystack = [
+        p.name, p.brandName, p.productName, p.category, p.campaignType,
+      ].map(s => String(s || '').toLowerCase()).join(' ');
+      return haystack.includes(productSearchQuery);
+    }
 
     function renderProducts() {
       const container = document.getElementById('productsList');
-      document.getElementById('productCount').textContent = products.length;
-      container.innerHTML = products.map((p, i) => {
+      // [요청] 제품 검색 — 매칭 인덱스만 추출, 카운트는 매칭/전체
+      const matchedIndices = products
+        .map((p, i) => productMatchesSearch(p) ? i : -1)
+        .filter(i => i >= 0);
+      document.getElementById('productCount').textContent =
+        productSearchQuery ? `${matchedIndices.length}/${products.length}` : products.length;
+      if (matchedIndices.length === 0 && products.length > 0) {
+        container.innerHTML = `<div style="text-align:center;color:#9ca3af;padding:32px;font-size:14px">검색 결과 없음</div>`;
+        return;
+      }
+      container.innerHTML = matchedIndices.map(i => {
+        const p = products[i];
         const isOpen = openProductIdx === i;
         return `
-        <div class="product-card ${isOpen ? 'editing' : ''}" id="product-${i}" style="cursor:pointer">
-          <div class="product-header" onclick="toggleProduct(${i})">
+        <div class="product-card ${isOpen ? 'editing' : ''}" id="product-${i}">
+          <div class="product-header" style="cursor:pointer" onclick="toggleProduct(${i})">
             <div style="display:flex;align-items:center;gap:10px">
               <span style="font-size:14px;color:#6b7280;transition:transform 0.2s;display:inline-block;transform:rotate(${isOpen?'90':'0'}deg)">&gt;</span>
               <span class="product-name">${esc(p.name) || '새 제품'}</span>
@@ -698,47 +742,112 @@
             </div>
           </div>
           <div style="display:${isOpen ? 'block' : 'none'};margin-top:16px">
-            <div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:12px">
+            <div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:12px;align-items:center">
+              <!-- [요청] 미저장 표시 -->
+              <span class="dirty-indicator">● 미저장</span>
               <button class="btn btn-primary btn-sm" onclick="event.stopPropagation();saveProducts()">저장</button>
               <button class="btn btn-danger btn-sm" onclick="event.stopPropagation();removeProduct(${i})">삭제</button>
             </div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
               <div class="form-group">
-                <label>관리명 (인플루언서 목록에서 매칭용)</label>
+                <!-- [요청] 필수 표시 -->
+                <label><span style="color:#ef4444;margin-right:2px">*</span>관리명 (인플루언서 목록에서 매칭용)</label>
                 <input type="text" value="${esc(p.name)}" onchange="products[${i}].name=this.value;updateProductHeader(${i})" onclick="event.stopPropagation()">
               </div>
               <div class="form-group">
-                <label>캠페인 유형</label>
-                <select onchange="products[${i}].campaignType=this.value;updateProductHeader(${i})" onclick="event.stopPropagation()">
-                  ${['공동구매','협찬','광고','체험단','기타'].map(t => `<option value="${t}" ${p.campaignType===t?'selected':''}>${t}</option>`).join('')}
-                </select>
+                <label>메일 제목</label>
+                <input type="text" value="${esc(p.mailSubject || '')}" onchange="products[${i}].mailSubject=this.value" onclick="event.stopPropagation()" placeholder="비우면 '[언엑스 공동구매] ${esc(p.name)} 공동구매 제안 건'으로 발송">
               </div>
+              <hr style="grid-column:1/-1;border:none;border-top:1px solid #e5e7eb;width:50%;margin:3px auto">
               <div class="form-group">
-                <label>브랜드명</label>
+                <label><span style="color:#ef4444;margin-right:2px">*</span>브랜드명</label>
                 <input type="text" value="${esc(p.brandName)}" onchange="products[${i}].brandName=this.value;updateProductHeader(${i})" onclick="event.stopPropagation()">
               </div>
               <div class="form-group">
-                <label>제품명</label>
+                <label><span style="color:#ef4444;margin-right:2px">*</span>제품명</label>
                 <input type="text" value="${esc(p.productName)}" onchange="products[${i}].productName=this.value;updateProductHeader(${i})" onclick="event.stopPropagation()">
               </div>
               <div class="form-group">
-                <label>카테고리</label>
+                <label><span style="color:#ef4444;margin-right:2px">*</span>카테고리</label>
                 <select onchange="products[${i}].category=this.value;updateProductHeader(${i})" onclick="event.stopPropagation()">
                   ${['육아·키즈','홈·리빙','뷰티','패션','식품','디지털','여행','건강','반려동물','기타'].map(t => `<option value="${t}" ${p.category===t?'selected':''}>${t}</option>`).join('')}
                 </select>
               </div>
+              <div class="form-group">
+                <label><span style="color:#ef4444;margin-right:2px">*</span>캠페인 유형</label>
+                <select onchange="products[${i}].campaignType=this.value;updateProductHeader(${i})" onclick="event.stopPropagation()">
+                  ${['공동구매','협찬','광고','체험단','기타'].map(t => `<option value="${t}" ${p.campaignType===t?'selected':''}>${t}</option>`).join('')}
+                </select>
+              </div>
             </div>
             <div class="form-group">
-              <label>메일 제목 (선택 · 비우면 "[언엑스 공동구매] ${esc(p.name)} 공동구매 제안 건")</label>
-              <input type="text" value="${esc(p.mailSubject || '')}" onchange="products[${i}].mailSubject=this.value" onclick="event.stopPropagation()" placeholder="비워두면 기본 제목 사용">
-            </div>
-            <div class="form-group">
-              <label>제품 특징 (USP)</label>
+              <label><span style="color:#ef4444;margin-right:2px">*</span>제품 특징 (USP)</label>
               <textarea rows="3" onchange="products[${i}].usp=this.value" onclick="event.stopPropagation()">${esc(p.usp)}</textarea>
             </div>
             <div class="form-group">
-              <label>제안 / 메일 내용</label>
+              <label><span style="color:#ef4444;margin-right:2px">*</span>제안 / 메일 내용</label>
               <textarea rows="4" onchange="products[${i}].offerMessage=this.value" onclick="event.stopPropagation()">${esc(p.offerMessage)}</textarea>
+            </div>
+            <!-- [요청] 제품 목록 필드 확장 — 후킹문구 동적 리스트 / [요청] 후킹문구 아코디언 -->
+            <div class="form-group">
+              <!-- [요청] 후킹문구 라벨 옆 버튼 배치 + 아코디언 헤더 -->
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+                <div style="display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none" onclick="event.stopPropagation();toggleHookingOpen(${i})">
+                  <span style="font-size:11px;color:#6b7280;display:inline-block;transform:rotate(${hookingOpenIdx.has(i)?'90':'0'}deg);transition:transform 0.15s">▶</span>
+                  <label style="margin:0;cursor:pointer">후킹문구 <span style="font-size:12px;color:#9ca3af">(${(p.hookingPhrases||[]).length}개)</span></label>
+                </div>
+                <div style="display:flex;gap:6px" onclick="event.stopPropagation()">
+                  <button class="btn btn-outline btn-sm" onclick="addHookingPhrase(${i})">+ 후킹문구 추가</button>
+                  <!-- [요청] 후킹문구 일괄 붙여넣기 -->
+                  <button class="btn btn-outline btn-sm" onclick="openHookingModal(${i})">📋 일괄 입력</button>
+                </div>
+              </div>
+              <div style="display:${hookingOpenIdx.has(i)?'block':'none'}" onclick="event.stopPropagation()">
+                ${(p.hookingPhrases||[]).map((h, hi) => `
+                  <div style="display:flex;gap:6px;margin-bottom:6px;align-items:center">
+                    <span style="min-width:24px;color:#6b7280;font-size:13px">${hi+1}.</span>
+                    <input type="text" style="flex:1" value="${esc(h)}" onchange="products[${i}].hookingPhrases[${hi}]=this.value">
+                    <button class="btn btn-danger btn-sm" onclick="removeHookingPhrase(${i},${hi})">−</button>
+                  </div>
+                `).join('')}
+              </div>
+              <!-- [요청] 공고 예시 링크 + 예시 주인 계정 2단 -->
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                <div class="form-group">
+                  <label>예시 링크</label>
+                  <input type="text" value="${esc(p.announceExampleLink || '')}" onchange="products[${i}].announceExampleLink=this.value" onclick="event.stopPropagation()" placeholder="선택">
+                </div>
+                <div class="form-group">
+                  <label>예시 계정</label>
+                  <input type="text" value="${esc(p.announceExampleOwner || '')}" onchange="products[${i}].announceExampleOwner=this.value" onclick="event.stopPropagation()" placeholder="선택">
+                </div>
+              </div>
+              <div class="form-group">
+                <label>제품 링크</label>
+                <input type="text" value="${esc(p.productLink || '')}" onchange="products[${i}].productLink=this.value" onclick="event.stopPropagation()" placeholder="선택">
+              </div>
+            </div>
+            <!-- [요청] 발송용 / 내부용 시각적 구분선 -->
+            <hr style="border:none;border-top:1px solid #e5e7eb;width:50%;margin:25px auto">
+            <!-- [요청] 제품 목록 필드 확장 — 추가 필드 그리드 (모두 선택) -->
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px">
+              <div class="form-group">
+                <label>허들</label>
+                <input type="text" value="${esc(p.hurdle || '')}" onchange="products[${i}].hurdle=this.value" onclick="event.stopPropagation()" placeholder="선택">
+              </div>
+              <div class="form-group">
+                <label>일정 참고사항</label>
+                <input type="text" value="${esc(p.schedule || '')}" onchange="products[${i}].schedule=this.value" onclick="event.stopPropagation()" placeholder="선택">
+              </div>
+              <div class="form-group">
+                <label>연령대</label>
+                <input type="text" value="${esc(p.ageRange || '')}" onchange="products[${i}].ageRange=this.value" onclick="event.stopPropagation()" placeholder="선택">
+              </div>
+            </div>
+            <!-- [요청] 제품 목록 필드 확장 — 메모 -->
+            <div class="form-group">
+              <label>메모 <span style="font-size:12px;color:#9ca3af">(내부용)</span></label>
+              <textarea rows="3" onchange="products[${i}].memo=this.value" onclick="event.stopPropagation()">${esc(p.memo || '')}</textarea>
             </div>
             <div class="form-group">
               <label>사진</label>
@@ -771,6 +880,11 @@
     }
 
     function addProduct() {
+      // [요청] 제품 검색 — 새 제품이 검색 필터에 가려지지 않도록 검색어 비움
+      productSearchQuery = '';
+      const searchInput = document.getElementById('productSearch');
+      if (searchInput) searchInput.value = '';
+      // [요청] 제품 목록 필드 확장 — 신규 필드 7종 초기화
       products.unshift({
         name: '',
         brandName: '',
@@ -780,9 +894,65 @@
         mailSubject: '',
         usp: '',
         offerMessage: '',
+        hookingPhrases: [],
+        productLink: '',
+        announceExampleLink: '',
+        announceExampleOwner: '', // [요청] 예시 주인 계정
+        hurdle: '',
+        schedule: '',
+        memo: '',
+        ageRange: '',
         photos: []
       });
       openProductIdx = 0;
+      renderProducts();
+      markProductsDirty(); // [요청] 미저장 표시
+    }
+
+    // [요청] 제품 목록 필드 확장 — 후킹문구 가변 리스트
+    function addHookingPhrase(i) {
+      if (!Array.isArray(products[i].hookingPhrases)) products[i].hookingPhrases = [];
+      products[i].hookingPhrases.push('');
+      hookingOpenIdx.add(i); // [요청] 후킹문구 아코디언 — 추가 시 자동 펼침
+      renderProducts();
+      markProductsDirty(); // [요청] 미저장 표시
+    }
+    function removeHookingPhrase(i, hi) {
+      products[i].hookingPhrases.splice(hi, 1);
+      renderProducts();
+      markProductsDirty(); // [요청] 미저장 표시
+    }
+
+    // [요청] 후킹문구 일괄 붙여넣기 — 모달 제어
+    let currentHookingTarget = -1;
+    function openHookingModal(i) {
+      currentHookingTarget = i;
+      document.getElementById('hookingModalTextarea').value = '';
+      const appendRadio = document.querySelector('input[name="hookingMode"][value="append"]');
+      if (appendRadio) appendRadio.checked = true;
+      const modal = document.getElementById('hookingModal');
+      modal.style.display = 'flex';
+      setTimeout(() => document.getElementById('hookingModalTextarea').focus(), 0);
+    }
+    function closeHookingModal() {
+      document.getElementById('hookingModal').style.display = 'none';
+      currentHookingTarget = -1;
+    }
+    function applyHookingModal() {
+      if (currentHookingTarget < 0 || !products[currentHookingTarget]) return;
+      const raw = document.getElementById('hookingModalTextarea').value;
+      const lines = raw.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+      if (!lines.length) { alert('입력된 후킹문구가 없습니다.'); return; }
+      const modeEl = document.querySelector('input[name="hookingMode"]:checked');
+      const mode = modeEl ? modeEl.value : 'append';
+      const target = products[currentHookingTarget];
+      if (!Array.isArray(target.hookingPhrases)) target.hookingPhrases = [];
+      target.hookingPhrases = (mode === 'replace')
+        ? lines
+        : target.hookingPhrases.concat(lines);
+      hookingOpenIdx.add(currentHookingTarget); // [요청] 후킹문구 아코디언 — 일괄 입력 후 자동 펼침
+      markProductsDirty(); // [요청] 미저장 표시
+      closeHookingModal();
       renderProducts();
     }
 
@@ -790,12 +960,14 @@
       if (!confirm('이 제품을 삭제하시겠습니까?')) return;
       products.splice(i, 1);
       renderProducts();
-      saveProducts();
+      // [요청] 저장 버튼 명시 저장만 — 자동 saveProducts 제거
+      markProductsDirty(); // [요청] 미저장 표시
     }
 
     function removePhoto(pi, photoIdx) {
       products[pi].photos.splice(photoIdx, 1);
       renderProducts();
+      markProductsDirty(); // [요청] 미저장 표시
     }
 
     async function uploadPhotos(productIdx, files) {
@@ -815,11 +987,36 @@
       const data = await res.json();
       products[productIdx].photos = [...(products[productIdx].photos || []), ...data.files];
       renderProducts();
-      saveProducts();
+      // [요청] 저장 버튼 명시 저장만 — 자동 saveProducts 제거
+      markProductsDirty(); // [요청] 미저장 표시
     }
 
     async function saveProducts() {
-      await fetch('/api/products', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(products) });
+      // [요청] 제품 목록 필드 확장 — 메일제목 제외 기존 필드 필수 검증
+      const required = [
+        ['name', '관리명'],
+        ['campaignType', '캠페인 유형'],
+        ['brandName', '브랜드명'],
+        ['productName', '제품명'],
+        ['category', '카테고리'],
+        ['usp', '제품 특징(USP)'],
+        ['offerMessage', '제안/메일 내용'],
+      ];
+      for (let i = 0; i < products.length; i++) {
+        const p = products[i];
+        for (const [key, label] of required) {
+          if (!String(p[key] || '').trim()) {
+            const who = p.name ? `[${p.name}]` : `(${i+1}번째 제품)`;
+            alert(`${who} '${label}' 항목이 비어있습니다.`);
+            openProductIdx = i;
+            renderProducts();
+            return;
+          }
+        }
+      }
+      const res = await fetch('/api/products', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(products) });
+      if (!res.ok) { alert('저장 실패: ' + res.status); return; }
+      clearProductsDirty(); // [요청] 미저장 표시 — 저장 성공 시 clean
       alert('제품 정보가 저장되었습니다.');
     }
 
@@ -1261,6 +1458,13 @@
     loadEmailAccounts();
     loadProducts();
     loadInfluencers();
+    // [요청] 미저장 표시 — productsList 내 모든 input/select/textarea 변경 감지
+    document.getElementById('productsList').addEventListener('input', e => {
+      if (e.target.matches('input, textarea, select')) markProductsDirty();
+    });
+    document.getElementById('productsList').addEventListener('change', e => {
+      if (e.target.matches('input, textarea, select')) markProductsDirty();
+    });
     loadRunStats();
     loadFailed();
     // [요청] 발송 중 크래시 대비 — 초기 로드
@@ -1269,5 +1473,25 @@
     syncMacroRunning();
     pollReplies();
   </script>
+
+  <!-- [요청] 후킹문구 일괄 붙여넣기 — 모달 -->
+  <div id="hookingModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center" onclick="if(event.target===this)closeHookingModal()">
+    <div style="background:white;border-radius:12px;padding:24px;max-width:600px;width:90%;max-height:80vh;display:flex;flex-direction:column;gap:14px;box-shadow:0 10px 40px rgba(0,0,0,0.2)">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <h3 style="margin:0;font-size:18px">후킹문구 일괄 입력</h3>
+        <button class="btn btn-sm" style="background:transparent;color:#6b7280;padding:4px 8px" onclick="closeHookingModal()">✕</button>
+      </div>
+      <div style="font-size:13px;color:#6b7280">한 줄에 한 개씩 붙여넣으세요. 빈 줄은 자동으로 제외됩니다.</div>
+      <textarea id="hookingModalTextarea" rows="14" placeholder="후킹문구1&#10;후킹문구2&#10;후킹문구3" style="font-family:inherit"></textarea>
+      <div style="display:flex;gap:18px;font-size:13px;color:#374151">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="radio" name="hookingMode" value="append" checked style="width:auto"> 기존 항목 뒤에 추가</label>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="radio" name="hookingMode" value="replace" style="width:auto"> 교체(전체 덮어쓰기)</label>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn btn-outline btn-sm" onclick="closeHookingModal()">취소</button>
+        <button class="btn btn-primary btn-sm" onclick="applyHookingModal()">적용</button>
+      </div>
+    </div>
+  </div>
 </body>
 </html>

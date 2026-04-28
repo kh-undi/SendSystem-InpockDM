@@ -103,6 +103,7 @@ async function migrateProducts(urlMap) {
   const list = json.products || [];
   if (!list.length) return 0;
 
+  // [요청] 제품 목록 필드 확장 — 신규 컬럼 7종 매핑
   const productRows = list.map(p => ({
     name: p.name,
     brand_name: p.brandName || null,
@@ -112,6 +113,14 @@ async function migrateProducts(urlMap) {
     mail_subject: p.mailSubject || null,
     usp: p.usp || null,
     offer_message: p.offerMessage || null,
+    hooking_phrases: Array.isArray(p.hookingPhrases) ? p.hookingPhrases : [],
+    product_link: p.productLink || null,
+    announce_example_link: p.announceExampleLink || null,
+    announce_example_owner: p.announceExampleOwner || null,
+    hurdle: p.hurdle || null,
+    schedule: p.schedule || null,
+    memo: p.memo || null,
+    age_range: p.ageRange || null,
   }));
   const { data: inserted, error } = await supabase
     .from('products').insert(productRows).select('id, name');

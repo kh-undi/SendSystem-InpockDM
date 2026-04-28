@@ -33,11 +33,14 @@ async function uploadPhotoJson(localPath) {
 
 // ─── Supabase 구현 ───
 async function listSupabase() {
+  // [요청] 제품 목록 필드 확장 — hooking_phrases ~ age_range select·매핑 추가
   const { data, error } = await supabase
     .from('products')
     .select(
       'id, name, brand_name, product_name, campaign_type, category, ' +
       'mail_subject, usp, offer_message, ' +
+      'hooking_phrases, product_link, announce_example_link, announce_example_owner, ' +
+      'hurdle, schedule, memo, age_range, ' +
       'product_photos(url, sort_order)'
     )
     .order('id');
@@ -52,6 +55,14 @@ async function listSupabase() {
     mailSubject: p.mail_subject || '',
     usp: p.usp || '',
     offerMessage: p.offer_message || '',
+    hookingPhrases: Array.isArray(p.hooking_phrases) ? p.hooking_phrases : [],
+    productLink: p.product_link || '',
+    announceExampleLink: p.announce_example_link || '',
+    announceExampleOwner: p.announce_example_owner || '',
+    hurdle: p.hurdle || '',
+    schedule: p.schedule || '',
+    memo: p.memo || '',
+    ageRange: p.age_range || '',
     photos: (p.product_photos || [])
       .slice()
       .sort((a, b) => a.sort_order - b.sort_order)
@@ -67,6 +78,7 @@ async function replaceAllSupabase(products) {
 
   if (!products || !products.length) return;
 
+  // [요청] 제품 목록 필드 확장 — insert 매핑에 신규 컬럼 7종 추가
   const productRows = products.map(p => ({
     name: p.name,
     brand_name: p.brandName || null,
@@ -76,6 +88,14 @@ async function replaceAllSupabase(products) {
     mail_subject: p.mailSubject || null,
     usp: p.usp || null,
     offer_message: p.offerMessage || null,
+    hooking_phrases: Array.isArray(p.hookingPhrases) ? p.hookingPhrases : [],
+    product_link: p.productLink || null,
+    announce_example_link: p.announceExampleLink || null,
+    announce_example_owner: p.announceExampleOwner || null,
+    hurdle: p.hurdle || null,
+    schedule: p.schedule || null,
+    memo: p.memo || null,
+    age_range: p.ageRange || null,
   }));
   const { data: inserted, error } = await supabase
     .from('products').insert(productRows).select('id, name');

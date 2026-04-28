@@ -6,9 +6,100 @@
 
 [ 요청사항 ]
 
+
 [ 실행계획 ]
 
+
 [ 작업완료 ]
+## 제품 검색 기능 (26.04.28)
+[public/index.html](public/index.html):
+- 제품 목록 actions-bar에 검색 input(`type=search`) 추가 — 관리명/브랜드명/제품명/카테고리/캠페인유형 대상, 대소문자 무시 substring 매칭.
+- `productSearchQuery` 전역 + `productMatchesSearch(p)` 헬퍼 + `onProductSearchChange()` 라이브 핸들러.
+- `renderProducts()`: 매칭 인덱스만 카드 렌더, 인덱스(`i`)는 원래 배열 인덱스 유지 → onchange·사진 업로드·삭제 핸들러 정합성 보존.
+- `productCount`: 검색 중엔 `매칭/전체`(예: `3/12`), 평소엔 전체.
+- 매칭 0건 + 제품 있을 때 "검색 결과 없음" 안내.
+- `addProduct()` 호출 시 검색어 자동 비움 — 새 제품이 필터에 가려지지 않도록.
+
+## 사진 orphan 정리 + 미저장 표시 (26.04.28)
+### 1. orphan 정리 스크립트
+- [scripts/cleanupOrphanPhotos.js](scripts/cleanupOrphanPhotos.js) 신규.
+  - Storage `product-photos` 전체 list(paginated) ↔ DB `product_photos.url` 비교 → 미참조 = orphan.
+  - 기본 **dry-run** (출력만), `--force`로 실제 삭제. 삭제 전 5초 카운트다운.
+  - **30분 grace period** 기본 (방금 업로드한 파일 보호). `--grace <분>` 으로 조정.
+  - DB 조회 실패 시 즉시 abort(전부 삭제 방지).
+  - `USE_SUPABASE=false` 모드에선 즉시 종료(해당 없음).
+- [package.json](package.json) 에 `npm run cleanup-orphans` 스크립트 추가.
+- signatures 버킷은 이번 작업 미포함 — 동일 구조이므로 후속 요청 시 같은 방식으로 추가 가능.
+
+### 2. 미저장 변경사항 표시
+- [public/index.html](public/index.html):
+  - CSS: `.dirty-indicator { display:none ... color:#f59e0b }`, `body.products-dirty .dirty-indicator { display:inline }`.
+  - 헬퍼: `markProductsDirty()` / `clearProductsDirty()` (body class 토글).
+  - 카드 액션 영역 저장 버튼 좌측에 `<span class="dirty-indicator">● 미저장</span>` 추가.
+  - 변경 감지: `productsList` 컨테이너에 `input`/`change` 이벤트 위임 — 모든 input/textarea/select 입력 자동 마킹.
+  - 프로그래매틱 변경(`addProduct`/`removeProduct`/`addHookingPhrase`/`removeHookingPhrase`/`applyHookingModal`/`uploadPhotos`/`removePhoto`)에서 `markProductsDirty()` 명시 호출.
+  - `loadProducts()` 완료 후, `saveProducts()` 성공(2xx) 후 `clearProductsDirty()`. 검증 실패/네트워크 실패 시엔 dirty 유지.
+- 색상: 주황 `#f59e0b` — 알아챌 수는 있되 거슬리지 않게.
+
+## 제품 — 저장 버튼 명시 저장만 (26.04.28)
+사진 업로드·제품 삭제 시에도 명시적으로 "저장" 버튼을 눌러야 DB 반영되도록 통일.
+- [public/index.html](public/index.html):
+  - `uploadPhotos()`: 마지막의 자동 `saveProducts()` 호출 제거. 메모리·UI에는 즉시 반영, DB 반영은 저장 버튼.
+  - `removeProduct()`: 마지막의 자동 `saveProducts()` 호출 제거. 동일하게 저장 버튼으로만 반영.
+- 텍스트 필드(브랜드명/USP/후킹문구 등)는 원래부터 onchange 시 메모리만 갱신 → 동작 일관.
+- 주의: 업로드한 사진은 이미 서버 Storage엔 올라간 상태. 저장 버튼 안 누르고 새로고침하면 products 행에는 photo URL이 안 묶이지만 Storage 파일은 남아있음(orphan). 추후 정리 필요 시 별도 작업.
+
+## 제품 카드 정리 + 예시 주인 계정 + 필수 표시 (26.04.28)
+1. **빈 여백 손 커서 제거** — [public/index.html](public/index.html) `.product-card` 외곽 div의 `style="cursor:pointer"`를 `.product-header`로 이동. 클릭 영역(헤더)만 손 모양, 펼친 카드 본문은 기본 커서.
+2. **"예시 주인 계정" 컬럼 추가** (선택·내부용 텍스트 필드)
+   - [scripts/schema.sql](scripts/schema.sql) products 테이블 + 하단 ALTER 블록에 `announce_example_owner text` 추가.
+   - ⚠️ 운영 DB용 1줄: `alter table products add column if not exists announce_example_owner text;`
+   - [src/repo/productsRepo.js](src/repo/productsRepo.js) `listSupabase` / `replaceAllSupabase` 매핑 확장.
+   - [scripts/migrateJsonToSupabase.js](scripts/migrateJsonToSupabase.js) `migrateProducts` 매핑 확장.
+   - [public/index.html](public/index.html) "공고 예시 링크" 아래에 "예시 주인 계정" form-group 추가 + `addProduct` 초기화에 `announceExampleOwner: ''` 추가.
+3. **필수 항목 빨간 `*`** — [public/index.html](public/index.html) `renderProducts()` 의 7개 필수 라벨(관리명/브랜드명/제품명/카테고리/캠페인유형/USP/제안메일내용) 앞에 `<span style="color:#ef4444;margin-right:2px">*</span>` prefix. 메일 제목은 선택이라 미표시.
+
+## 후킹문구 아코디언 (26.04.28)
+후킹문구 입력 리스트를 접었다 폈다 가능하도록.
+- [public/index.html](public/index.html):
+  - 전역 `Set hookingOpenIdx` + `toggleHookingOpen(i)` 추가.
+  - `renderProducts()` 후킹문구 헤더 좌측에 chevron(`▶`, 펼침 시 90° 회전)과 라벨을 묶어 클릭 영역으로. 카운트 `(N개)`는 항상 표시.
+  - 입력 리스트 div는 `display:${hookingOpenIdx.has(i)?'block':'none'}` 으로 조건부 노출.
+  - `addHookingPhrase`/`applyHookingModal`에서 해당 인덱스를 `hookingOpenIdx`에 add → 추가/일괄 입력 직후 자동 펼침.
+  - 기본 상태: 접힘.
+
+## hr 정렬 + 후킹문구 버튼 위치 (26.04.28)
+[public/index.html](public/index.html) `renderProducts()` 미세 정리.
+- 구분선 hr: `width:50%;margin:20px auto 0` — 가운데 정렬, 절반 길이.
+- 후킹문구 섹션: 상단에 flex row(`justify-content:space-between`) 추가해 좌측 라벨 / 우측 "+ 후킹문구 추가"·"📋 일괄 입력" 두 버튼 배치. 입력 row 리스트는 그 아래로.
+
+## 제품 카드 — 발송용 / 내부용 시각적 구분선 (26.04.28)
+[public/index.html](public/index.html) `renderProducts()` 의 추가 필드 그리드 마커 위에 연한 `<hr>` 삽입.
+- 스타일: `border:none;border-top:1px solid #e5e7eb;margin:20px 0 0` — 기존 product-card 테두리·photo-thumb과 동일한 `#e5e7eb` 사용해 톤 통일. 텍스트 없이 시각적 구분만.
+
+## 후킹문구 일괄 붙여넣기 (26.04.28)
+줄바꿈으로 구분된 텍스트를 모달에 붙여넣어 후킹문구 여러 개를 한 번에 등록.
+- [public/index.html](public/index.html):
+  - 후킹문구 섹션 버튼 영역에 **"📋 일괄 입력"** 추가 (기존 "+ 후킹문구 추가"와 나란히, 둘 다 `btn-outline btn-sm`로 통일).
+  - `</body>` 직전에 모달 오버레이 div(`#hookingModal`) 추가 — textarea(rows=14), "기존 항목 뒤에 추가"/"교체" 라디오, "적용"/"취소"/"✕" 버튼. 배경 클릭 시 닫힘.
+  - JS 함수 `openHookingModal(i)` / `closeHookingModal()` / `applyHookingModal()` + 전역 `currentHookingTarget` 추가.
+  - "적용" 동작: textarea를 `\n` 기준 split → trim → 빈 줄 제거 → 모드에 따라 append 또는 replace. 빈 입력은 alert로 차단.
+
+## 제품 목록 필드 확장 (26.04.28)
+제품관리 > 제품 목록에 7개 신규 필드 추가 + 기존 필드 필수 검증.
+- **신규 필드(모두 선택, 내부용)**: 후킹문구(`text[]` +/− 가변), 제품링크, 공고예시링크, 허들, 일정, 메모, 연령대
+- **필수 검증**: 메일제목 제외 기존 필드 전부 (관리명/캠페인유형/브랜드명/제품명/카테고리/USP/제안메일내용). `saveProducts()`가 빈 값 시 alert + 해당 카드 펼치고 중단.
+- [scripts/schema.sql](scripts/schema.sql) products 테이블에 7컬럼 추가 + 기존 DB용 멱등 ALTER 블록 추가.
+  - ⚠️ 기존 Supabase DB는 SQL Editor에서 `ALTER TABLE products ADD COLUMN IF NOT EXISTS ...` 7줄을 1회 실행해야 함.
+- [src/repo/productsRepo.js](src/repo/productsRepo.js): `listSupabase` SELECT·매핑, `replaceAllSupabase` insert 매핑 확장. JSON 모드는 자연 통과.
+- [scripts/migrateJsonToSupabase.js](scripts/migrateJsonToSupabase.js) `migrateProducts`: 재실행 시 일관성 위해 7필드 매핑 추가.
+- [public/index.html](public/index.html):
+  - `renderProducts()`: 기존 2열 그리드 뒤에 새 그리드(제품링크/공고예시링크/허들/일정/연령대), 후킹문구 동적 리스트(+/− 버튼), 메모 textarea 추가.
+  - `addProduct()`: 신규 객체에 7필드 초기화.
+  - `addHookingPhrase`/`removeHookingPhrase` 헬퍼 추가.
+  - `saveProducts()`: 필수 검증 추가.
+- 메일/제안서 코드(`emailSender.js`/`proposal.js`)는 변경 없음 — 신규 필드는 UI/DB 저장 전용.
+
 ## 다중 PC 접속 시 매크로 실행 상태 동기화 (26.04.27)
 한쪽 PC에서 매크로 실행 중일 때 다른 PC에서 접속해도 UI가 동일하게 보이도록 수정.
 - [public/index.html](public/index.html) `syncMacroRunning()` 함수 추가 — `/api/macro/status` GET → `running===true`이면 `btnStart`/`btnDryRun` 숨김, `btnStop` 노출, `headerStatus` "발송 중", `pollTimer = setInterval(pollStatus, 1000)` + 즉시 `pollStatus()` 1회 호출.

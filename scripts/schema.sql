@@ -62,18 +62,27 @@ create table if not exists email_accounts (
 ------------------------------------------------------------
 -- 4. products : 제품 마스터
 ------------------------------------------------------------
+-- [요청] 제품 목록 필드 확장 — hooking_phrases ~ age_range 컬럼 추가
 create table if not exists products (
-  id              serial      primary key,
-  name            text        not null unique,    -- influencers.product_name 매칭 키
-  brand_name      text,
-  product_name    text,
-  campaign_type   text,
-  category        text,
-  mail_subject    text,
-  usp             text,
-  offer_message   text,
-  created_at      timestamptz not null default now(),
-  updated_at      timestamptz not null default now()
+  id                     serial      primary key,
+  name                   text        not null unique,    -- influencers.product_name 매칭 키
+  brand_name             text,
+  product_name           text,
+  campaign_type          text,
+  category               text,
+  mail_subject           text,
+  usp                    text,
+  offer_message          text,
+  hooking_phrases        text[]      not null default '{}',
+  product_link           text,
+  announce_example_link  text,
+  announce_example_owner text,
+  hurdle                 text,
+  schedule               text,
+  memo                   text,
+  age_range              text,
+  created_at             timestamptz not null default now(),
+  updated_at             timestamptz not null default now()
 );
 
 ------------------------------------------------------------
@@ -162,3 +171,15 @@ create table if not exists settings (
   value       jsonb       not null,
   updated_at  timestamptz not null default now()
 );
+
+-- [요청] 제품 목록 필드 확장 — 기존 테이블용 마이그레이션
+--   이미 배포된 DB는 위의 create table if not exists가 no-op이므로,
+--   아래 ALTER를 SQL Editor에서 한 번 실행해야 새 컬럼이 추가됨.
+alter table products add column if not exists hooking_phrases        text[] not null default '{}';
+alter table products add column if not exists product_link           text;
+alter table products add column if not exists announce_example_link  text;
+alter table products add column if not exists announce_example_owner text;
+alter table products add column if not exists hurdle                 text;
+alter table products add column if not exists schedule               text;
+alter table products add column if not exists memo                   text;
+alter table products add column if not exists age_range              text;
