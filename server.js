@@ -155,6 +155,21 @@ app.post('/api/accounts/reset', async (req, res) => {
   }
 });
 
+// [요청] 주간 카운트 강제 증감 — 수동 발송 보정용
+app.post('/api/accounts/:id/adjust-week', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const delta = parseInt(req.body && req.body.delta, 10);
+    if (!Number.isFinite(id) || !Number.isFinite(delta) || (delta !== 1 && delta !== -1)) {
+      return res.status(400).json({ error: 'id 및 delta(±1) 필요' });
+    }
+    const newCount = await accountManager.adjustSendCount(id, delta);
+    res.json({ ok: true, count: newCount });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ─── 이메일 계정 API (Gmail) ───
 // [요청] emailAccountsRepo 경유로 변경 — USE_SUPABASE 플래그에 따라 JSON/Supabase 자동 분기
 const emailAccountsRepo = require('./src/repo/emailAccountsRepo');

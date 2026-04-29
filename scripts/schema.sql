@@ -45,6 +45,27 @@ begin
 end;
 $$;
 
+-- [요청] 주간 카운트 강제 증감 — 수동 발송 보정용 원자적 ±delta RPC.
+--   supabase.rpc('adjust_weekly_count', { p_account_id: 1, p_week_key: '2026-W17', p_delta: -1 })
+-- count는 0 미만으로 내려가지 않도록 greatest(..., 0)으로 클램프.
+-- 운영 DB에는 SQL Editor에서 이 함수 1회 실행 필요.
+create or replace function adjust_weekly_count(p_account_id int, p_week_key text, p_delta int)
+returns int
+language plpgsql
+as $$
+declare
+  new_count int;
+begin
+  insert into weekly_tracking(account_id, week_key, count)
+  values (p_account_id, p_week_key, greatest(p_delta, 0))
+  on conflict (account_id, week_key)
+  do update set count = greatest(weekly_tracking.count + p_delta, 0),
+                updated_at = now()
+  returning count into new_count;
+  return new_count;
+end;
+$$;
+
 ------------------------------------------------------------
 -- 3. email_accounts : Gmail 발송 계정
 ------------------------------------------------------------

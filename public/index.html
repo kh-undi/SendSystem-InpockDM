@@ -103,10 +103,28 @@
     body.products-dirty .dirty-indicator { display: inline; }
 
     /* 실행 패널 */
-    .run-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 20px; }
+    .run-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 12px; }
     .stat-card { background: #f9fafb; border-radius: 10px; padding: 16px; text-align: center; }
     .stat-value { font-size: 28px; font-weight: 800; color: #6366f1; }
     .stat-label { font-size: 12px; color: #6b7280; margin-top: 4px; }
+    /* [요청] 다음 사용 계정 표시 */
+    .next-account-row { background: #eef2ff; border: 1px solid #c7d2fe; border-radius: 10px; padding: 12px 16px; margin-bottom: 20px; font-size: 14px; color: #1f2937; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+    .next-account-row .info { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; }
+    .next-account-row .label { color: #4f46e5; font-weight: 700; margin-right: 8px; }
+    .next-account-row .username { font-weight: 800; color: #111827; }
+    .next-account-row .meta { color: #6b7280; margin-left: 8px; font-size: 12px; }
+    .next-account-row.empty { background: #fef3c7; border-color: #fde68a; }
+    .next-account-row.empty .label { color: #b45309; }
+    /* [요청] 주간 카운트 강제 증감 버튼 */
+    .next-account-row .adjust-group { display: flex; gap: 6px; align-items: center; }
+    .next-account-row .adjust-btn { width: 32px; height: 28px; border-radius: 6px; border: 1px solid #c7d2fe; background: #fff; color: #4f46e5; font-size: 14px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; padding: 0; }
+    .next-account-row .adjust-btn:hover:not(:disabled) { background: #e0e7ff; }
+    .next-account-row .adjust-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    /* [요청] 수동발송처리 4단계 */
+    .next-account-row .manual-send-btn { height: 28px; padding: 0 12px; border-radius: 6px; border: 1px solid #c7d2fe; background: #fff; color: #4f46e5; font-size: 13px; font-weight: 700; cursor: pointer; }
+    .next-account-row .manual-send-btn:hover { background: #e0e7ff; }
+    .next-account-row .done-btn { height: 28px; padding: 0 12px; border-radius: 6px; border: 1px solid #6366f1; background: #6366f1; color: #fff; font-size: 13px; font-weight: 700; cursor: pointer; margin-left: 4px; }
+    .next-account-row .done-btn:hover { background: #4f46e5; }
 
     .actions-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
 
@@ -276,6 +294,8 @@
       <div class="card">
         <div class="card-title">발송 현황</div>
         <div class="run-stats" id="runStats"></div>
+        <!-- [요청] 다음 사용 계정 표시 -->
+        <div id="nextAccountRow"></div>
       </div>
 
       <div class="card">
@@ -1124,6 +1144,90 @@
         <div class="stat-card"><div class="stat-value">${totalRemaining}</div><div class="stat-label">남은 슬롯</div></div>
         <div class="stat-card"><div class="stat-value">${accs.length}</div><div class="stat-label">총 계정</div></div>
       `;
+
+      // [요청] 다음 사용 계정 표시 — accountManager.getAvailableAccount() 와 동일 규칙(id ASC + remaining>0 첫 계정).
+      const nextRow = document.getElementById('nextAccountRow');
+      if (accs.length === 0) {
+        nextRow.className = 'next-account-row empty';
+        nextRow.innerHTML = `<div class="info"><span class="label">다음 사용 계정 (인포크)</span><span>등록된 계정 없음</span></div>`;
+        currentNextAccountId = null;
+        manualEditMode = false;
+      } else {
+        const next = accs.find(a => a.remaining > 0);
+        if (!next) {
+          nextRow.className = 'next-account-row empty';
+          nextRow.innerHTML = `<div class="info"><span class="label">다음 사용 계정 (인포크)</span><span>모든 계정 이번 주 한도 소진</span></div>`;
+          currentNextAccountId = null;
+          manualEditMode = false;
+        } else {
+          nextRow.className = 'next-account-row';
+          // [요청] 수동발송처리 4단계 — 다음 사용 계정이 바뀌면 편집 모드 자동 종료(다른 계정에 의도치 않게 ±하지 않도록)
+          if (currentNextAccountId !== null && currentNextAccountId !== next.id) {
+            manualEditMode = false;
+          }
+          currentNextAccountId = next.id;
+          const infoHtml = `
+            <div class="info">
+              <span class="label">다음 사용 계정 (인포크)</span>
+              <span class="username">${esc(next.username)}</span>
+              <span class="meta">이번 주 ${next.sent}/10 발송 · 남은 슬롯 ${next.remaining}개</span>
+            </div>`;
+          // [요청] 수동발송처리 4단계 — 평소엔 [수동발송처리] 한 버튼만, 모달 확인 후에만 ±1/수정완료 노출
+          const actionHtml = manualEditMode
+            ? `<div class="adjust-group" title="수동 발송한 경우 카운트 보정 — 즉시 반영">
+                <button class="adjust-btn" onclick="adjustNextAccount(-1)" ${next.sent <= 0 ? 'disabled' : ''} title="이번 주 발송 카운트 -1">−1</button>
+                <button class="adjust-btn" onclick="adjustNextAccount(1)" title="이번 주 발송 카운트 +1">+1</button>
+                <button class="done-btn" onclick="closeManualEdit()">수정완료</button>
+              </div>`
+            : `<div class="adjust-group">
+                <button class="manual-send-btn" onclick="openManualSendModal()" title="수동으로 인포크 발송했을 때 카운트 보정">수동발송처리</button>
+              </div>`;
+          nextRow.innerHTML = infoHtml + actionHtml;
+        }
+      }
+    }
+
+    // [요청] 수동발송처리 4단계 — 1단계→2단계: 모달 열기
+    let manualEditMode = false;
+    function openManualSendModal() {
+      document.getElementById('manualSendModal').style.display = 'flex';
+    }
+    function closeManualSendModal() {
+      document.getElementById('manualSendModal').style.display = 'none';
+    }
+    // 2단계→3단계: 확인 시 편집 모드 진입
+    function confirmManualSend() {
+      manualEditMode = true;
+      closeManualSendModal();
+      loadRunStats();
+    }
+    // 4단계: 수정완료 → 닫힘 상태 복귀 (즉시반영 모델이라 별도 commit 없음)
+    function closeManualEdit() {
+      manualEditMode = false;
+      loadRunStats();
+    }
+
+    // [요청] 주간 카운트 강제 증감 — 현재 표시된 next 계정의 카운트를 즉시 ±1
+    let currentNextAccountId = null;
+    async function adjustNextAccount(delta) {
+      if (!currentNextAccountId) return;
+      const id = currentNextAccountId;
+      try {
+        const res = await fetch(`/api/accounts/${id}/adjust-week`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ delta }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          alert(`카운트 변경 실패: ${err.error || res.status}`);
+          return;
+        }
+      } catch (e) {
+        alert(`카운트 변경 실패: ${e.message}`);
+        return;
+      }
+      await loadRunStats();
     }
 
     async function startMacro(dryRun) {
@@ -1475,6 +1579,24 @@
   </script>
 
   <!-- [요청] 후킹문구 일괄 붙여넣기 — 모달 -->
+  <!-- [요청] 수동발송처리 4단계 — 확인 모달 -->
+  <div id="manualSendModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center" onclick="if(event.target===this)closeManualSendModal()">
+    <div style="background:white;border-radius:12px;padding:24px;max-width:420px;width:90%;display:flex;flex-direction:column;gap:14px;box-shadow:0 10px 40px rgba(0,0,0,0.2)">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <h3 style="margin:0;font-size:18px">수동 발송 보정</h3>
+        <button class="btn btn-sm" style="background:transparent;color:#6b7280;padding:4px 8px" onclick="closeManualSendModal()">✕</button>
+      </div>
+      <div style="font-size:14px;color:#1f2937;line-height:1.5">
+        수동으로 인포크를 보내셨습니까?<br>
+        <span style="font-size:13px;color:#6b7280">확인 시 ±1 보정 버튼이 노출됩니다.</span>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn btn-outline btn-sm" onclick="closeManualSendModal()">취소</button>
+        <button class="btn btn-primary btn-sm" onclick="confirmManualSend()">확인</button>
+      </div>
+    </div>
+  </div>
+
   <div id="hookingModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center" onclick="if(event.target===this)closeHookingModal()">
     <div style="background:white;border-radius:12px;padding:24px;max-width:600px;width:90%;max-height:80vh;display:flex;flex-direction:column;gap:14px;box-shadow:0 10px 40px rgba(0,0,0,0.2)">
       <div style="display:flex;justify-content:space-between;align-items:center">

@@ -28,6 +28,18 @@ async function incrementJson(accountId, weekKey) {
   return acc.weeklyTracking[weekKey];
 }
 
+// [요청] 주간 카운트 강제 증감 — JSON 모드 ±delta (max(0, ...))
+async function adjustJson(accountId, weekKey, delta) {
+  const accounts = jsonLoad();
+  const acc = accounts.find(a => a.id === accountId);
+  if (!acc) throw new Error(`계정 ID ${accountId}를 찾을 수 없습니다.`);
+  acc.weeklyTracking = acc.weeklyTracking || {};
+  const next = Math.max(0, (acc.weeklyTracking[weekKey] || 0) + delta);
+  acc.weeklyTracking[weekKey] = next;
+  jsonSave(accounts);
+  return next;
+}
+
 async function replaceAllJson(accounts) {
   // [요청] 설정 > 계정 추가 저장 안 됨 — id 결손 row(=신규)에 자동 id 부여 (Supabase는 SERIAL로 자동, JSON 모드만 보정)
   const existingIds = accounts.map(a => a.id).filter(id => id != null);
@@ -65,6 +77,17 @@ async function incrementSupabase(accountId, weekKey) {
   const { data, error } = await supabase.rpc('increment_weekly_count', {
     p_account_id: accountId,
     p_week_key: weekKey,
+  });
+  if (error) throw error;
+  return data;
+}
+
+// [요청] 주간 카운트 강제 증감 — Supabase 원자적 ±delta RPC
+async function adjustSupabase(accountId, weekKey, delta) {
+  const { data, error } = await supabase.rpc('adjust_weekly_count', {
+    p_account_id: accountId,
+    p_week_key: weekKey,
+    p_delta: delta,
   });
   if (error) throw error;
   return data;
@@ -109,6 +132,13 @@ async function incrementSendCount(accountId, weekKey) {
     : incrementJson(accountId, weekKey);
 }
 
+// [요청] 주간 카운트 강제 증감
+async function adjustSendCount(accountId, weekKey, delta) {
+  return config.USE_SUPABASE
+    ? adjustSupabase(accountId, weekKey, delta)
+    : adjustJson(accountId, weekKey, delta);
+}
+
 async function replaceAll(accounts) {
   return config.USE_SUPABASE
     ? replaceAllSupabase(accounts)
@@ -121,4 +151,4 @@ async function resetAllWeeklyTracking() {
     : resetAllWeeklyTrackingJson();
 }
 
-module.exports = { list, incrementSendCount, replaceAll, resetAllWeeklyTracking };
+module.exports = { list, incrementSendCount, adjustSendCount, replaceAll, resetAllWeeklyTracking };

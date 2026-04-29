@@ -11,6 +11,42 @@
 
 
 [ 작업완료 ]
+## 주간 카운트 증감 — 실수 방지 4단계 흐름 (26.04.29)
+실수 클릭 방지용 게이트. 평소엔 `[수동발송처리]` 버튼만, 모달 확인 후에만 ±1/수정완료 노출.
+- [public/index.html](public/index.html):
+  - CSS: `.manual-send-btn` (보조 보라톤 outline), `.done-btn` (보라 fill) 추가.
+  - HTML: `</body>` 직전 `#manualSendModal` 추가 — 본문 "수동으로 인포크를 보내셨습니까?", `[취소]`/`[확인]` 버튼 + 배경 클릭 닫기. hookingModal과 같은 inline 스타일 패턴.
+  - JS: 전역 `manualEditMode` 추가. `openManualSendModal()` / `closeManualSendModal()` / `confirmManualSend()` / `closeManualEdit()` 신설.
+  - `loadRunStats()`: 정상 next 계정 케이스에서 `manualEditMode` 분기 — 닫힘=`[수동발송처리]` 1개, 편집중=`[−1] [+1] [수정완료]`. 각 ±1 클릭은 기존 `adjustNextAccount(delta)`로 **즉시 DB 반영**(즉시반영 모델, 별도 commit 없음).
+  - 안전장치: 폴링 중 `currentNextAccountId`가 바뀌면 `manualEditMode=false`로 자동 종료 — 다른 계정에 의도치 않게 ±하지 않도록. empty/계정0개 케이스에서도 자동 종료.
+- 서버/repo/RPC 변경 없음.
+
+
+## 다음 사용 계정 옆에 주간 카운트 강제 증감 버튼 (26.04.29)
+수동 발송 보정용. "다음 사용 계정" 표시 우측에 `−1` / `+1` 버튼. 표시된 계정의 이번 주 카운트 즉시 변경 후 화면 갱신.
+- [scripts/schema.sql](scripts/schema.sql): `adjust_weekly_count(p_account_id, p_week_key, p_delta)` RPC 추가. UPSERT + `greatest(count+delta, 0)`로 0 미만 클램프. **운영 DB는 SQL Editor에서 이 함수 1회 실행 필요**(schema.sql의 `create or replace function adjust_weekly_count ...` 블록).
+- [src/repo/accountsRepo.js](src/repo/accountsRepo.js): `adjustJson` / `adjustSupabase` + 공용 `adjustSendCount(accountId, weekKey, delta)` 추가. JSON 모드는 `Math.max(0, c+delta)` 후 jsonSave. exports에 추가.
+- [src/accountManager.js](src/accountManager.js): `adjustSendCount(accountId, delta)` 노출 (현재 weekKey 자동).
+- [server.js](server.js): `POST /api/accounts/:id/adjust-week` 엔드포인트. body `{delta:±1}`만 허용, 그 외 400.
+- [public/index.html](public/index.html):
+  - `.next-account-row`를 flex(`space-between`)로 변경, `.info` / `.adjust-group` 분리.
+  - `.adjust-btn` 스타일 추가 (32×28, 보라톤).
+  - `loadRunStats()`: 정상 케이스에 `−1` / `+1` 버튼 렌더, `next.sent <= 0`이면 `−1` disabled. empty 케이스는 버튼 미렌더.
+  - 모듈 레벨 `currentNextAccountId` + `adjustNextAccount(delta)` 추가 — fetch 성공 후 `loadRunStats()` 재호출로 갱신.
+- 기존 매크로 발송의 `incrementSendCount` 흐름은 변경 없음.
+
+## 실행 > 발송 현황에 "다음 사용 계정" 표시 (26.04.29)
+인포크링크 발송 시 다음 순서로 사용될 계정을 '실행 > 발송 현황'에서 stat-card 묶음 아래에 명시.
+- "다음 사용 계정" 정의: [src/accountManager.js](src/accountManager.js) `getAvailableAccount()`와 동일 — `accountsRepo.list()` (`id` ASC) 중 `remaining > 0`인 첫 계정. 클라에서는 `/api/accounts` 응답에 `accs.find(a => a.remaining > 0)`로 산출.
+- [public/index.html](public/index.html):
+  - 카드 본문에 `<div id="nextAccountRow">` 추가 (run-stats 그리드 외부, 같은 카드 내).
+  - CSS `.next-account-row` 추가 — 보라톤 보조 박스. 소진/계정0개 케이스는 `.empty` 변형(주황톤).
+  - `loadRunStats()`: 4개 stat-card 렌더 후 next 계산 → 정상/소진/계정0개 3분기로 innerHTML 채움. 표시 형식: `다음 사용 계정 (인포크): <username> · 이번 주 N/10 발송 · 남은 슬롯 M개`.
+  - username은 기존 `esc()` 헬퍼로 escape.
+- API 추가 없음 — 기존 `/api/accounts`가 username/sent/remaining 전부 반환.
+- 폴링 흐름에 자연 편입 — 매 주기 `loadRunStats()` 호출 시 같이 갱신.
+
+
 ## 설정 > 계정 추가 저장 안 됨 (26.04.29)
 Supabase 모드에서 "+ 계정 추가" 후 저장 눌러도 DB에 들어가지 않던 버그 수정.
 - 원인: [public/index.html](public/index.html) `addAccount()`가 클라이언트에서 `Math.max(...ids)+1`로 임의 id 부여 → [src/repo/accountsRepo.js](src/repo/accountsRepo.js) `replaceAllSupabase`의 `id != null`은 update / `== null`은 insert 분기에서 신규 계정이 update로 떨어지고, 존재하지 않는 id에 대한 `update().eq('id', …)`는 에러 없는 nop이라 silent fail.

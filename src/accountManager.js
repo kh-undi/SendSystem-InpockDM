@@ -47,6 +47,12 @@ async function incrementSendCount(accountId) {
   return accountsRepo.incrementSendCount(accountId, weekKey);
 }
 
+// [요청] 주간 카운트 강제 증감 — 수동 발송 보정용. ±delta, 0 미만 클램프는 repo 레이어에서.
+async function adjustSendCount(accountId, delta) {
+  const weekKey = getCurrentWeekKey();
+  return accountsRepo.adjustSendCount(accountId, weekKey, delta);
+}
+
 /**
  * 모든 계정이 이번 주 한도를 다 사용했는지 확인
  */
@@ -75,6 +81,7 @@ module.exports = {
   getAvailableAccount,
   getRemainingSlots,
   incrementSendCount,
+  adjustSendCount,
   allAccountsExhausted,
   getStatusSummary,
 };
