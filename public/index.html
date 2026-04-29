@@ -459,7 +459,7 @@
         const pct = (acc.sent / 10) * 100;
         const cls = pct >= 100 ? 'full' : pct >= 50 ? 'mid' : 'low';
         return `<tr>
-          <td>${acc.id}</td>
+          <td>${acc.id ?? '신규'}</td>
           <td><input type="text" value="${esc(acc.username)}" onchange="accounts[${i}].username=this.value"></td>
           <td><input type="password" value="${esc(acc.password)}" onchange="accounts[${i}].password=this.value"></td>
           <td>
@@ -488,8 +488,8 @@
     }
 
     function addAccount() {
-      const nextId = accounts.length > 0 ? Math.max(...accounts.map(a => a.id)) + 1 : 1;
-      accounts.push({ id: nextId, username: '', password: '', weeklyTracking: {}, sent: 0, remaining: 10 });
+      // [요청] 설정 > 계정 추가 저장 안 됨 — id 부여를 server/repo에 위임 (id:null이어야 Supabase insert 분기 진입)
+      accounts.push({ id: null, username: '', password: '', weeklyTracking: {}, sent: 0, remaining: 10 });
       renderAccounts();
     }
 

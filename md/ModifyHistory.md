@@ -11,6 +11,13 @@
 
 
 [ 작업완료 ]
+## 설정 > 계정 추가 저장 안 됨 (26.04.29)
+Supabase 모드에서 "+ 계정 추가" 후 저장 눌러도 DB에 들어가지 않던 버그 수정.
+- 원인: [public/index.html](public/index.html) `addAccount()`가 클라이언트에서 `Math.max(...ids)+1`로 임의 id 부여 → [src/repo/accountsRepo.js](src/repo/accountsRepo.js) `replaceAllSupabase`의 `id != null`은 update / `== null`은 insert 분기에서 신규 계정이 update로 떨어지고, 존재하지 않는 id에 대한 `update().eq('id', …)`는 에러 없는 nop이라 silent fail.
+- [public/index.html](public/index.html) `addAccount()`: 신규 row를 `id: null`로 push → server에서 insert 분기 진입. 저장 후 `loadAccounts()`로 DB가 부여한 실제 id 수신.
+- [public/index.html](public/index.html) `renderAccounts()` id 셀: `${acc.id ?? '신규'}` — 저장 전 row는 "신규"로 표시.
+- [src/repo/accountsRepo.js](src/repo/accountsRepo.js) `replaceAllJson`: id 결손 row에 `Math.max(existing)+1`로 자동 id 부여 (Supabase는 SERIAL이라 무관, JSON 모드 호환용).
+
 ## 제품 검색 기능 (26.04.28)
 [public/index.html](public/index.html):
 - 제품 목록 actions-bar에 검색 input(`type=search`) 추가 — 관리명/브랜드명/제품명/카테고리/캠페인유형 대상, 대소문자 무시 substring 매칭.

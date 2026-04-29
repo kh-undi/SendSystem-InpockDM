@@ -29,7 +29,11 @@ async function incrementJson(accountId, weekKey) {
 }
 
 async function replaceAllJson(accounts) {
-  jsonSave(accounts);
+  // [요청] 설정 > 계정 추가 저장 안 됨 — id 결손 row(=신규)에 자동 id 부여 (Supabase는 SERIAL로 자동, JSON 모드만 보정)
+  const existingIds = accounts.map(a => a.id).filter(id => id != null);
+  let nextId = existingIds.length ? Math.max(...existingIds) + 1 : 1;
+  const normalized = accounts.map(a => (a.id == null ? { ...a, id: nextId++ } : a));
+  jsonSave(normalized);
 }
 
 async function resetAllWeeklyTrackingJson() {
