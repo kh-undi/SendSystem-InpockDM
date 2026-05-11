@@ -226,6 +226,90 @@ app.put('/api/products', async (req, res) => {
   }
 });
 
+// [요청] 카드 단위 저장 — 정통 신규 추가(풀 페이로드). "+ 제품 추가"로 만든 신규 stub의 첫 저장 시 호출.
+const REQUIRED_PRODUCT_FIELDS = [
+  ['name', '관리명'],
+  ['brandName', '브랜드명'],
+  ['productName', '제품명'],
+  ['category', '카테고리'],
+  ['campaignType', '캠페인 유형'],
+];
+function validateProductBody(body) {
+  for (const [key, label] of REQUIRED_PRODUCT_FIELDS) {
+    if (!String(body?.[key] || '').trim()) {
+      return `'${label}' 항목이 비어있습니다.`;
+    }
+  }
+  return null;
+}
+
+app.post('/api/products', async (req, res) => {
+  try {
+    const errMsg = validateProductBody(req.body);
+    if (errMsg) return res.status(400).json({ error: errMsg });
+    const created = await productsRepo.insertOne(req.body);
+    res.json({ ok: true, product: created });
+  } catch (e) {
+    if (e.code === 'DUPLICATE_NAME') {
+      return res.status(409).json({ error: '이미 같은 관리명의 제품이 존재합니다.' });
+    }
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// [요청] 카드 단위 저장 — 단건 update.
+app.put('/api/products/:id', async (req, res) => {
+  try {
+    const errMsg = validateProductBody(req.body);
+    if (errMsg) return res.status(400).json({ error: errMsg });
+    const updated = await productsRepo.updateOne(req.params.id, req.body);
+    res.json({ ok: true, product: updated });
+  } catch (e) {
+    if (e.code === 'DUPLICATE_NAME') {
+      return res.status(409).json({ error: '이미 같은 관리명의 제품이 존재합니다.' });
+    }
+    if (e.code === 'NOT_FOUND') {
+      return res.status(404).json({ error: '해당 제품을 찾을 수 없습니다.' });
+    }
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// [요청] 카드 단위 저장 — 단건 삭제.
+app.delete('/api/products/:id', async (req, res) => {
+  try {
+    await productsRepo.removeOne(req.params.id);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// [요청] 빠른 제품 추가 — 브랜드명/제품명만으로 단건 insert. 관리명=제품명.
+app.post('/api/products/quick', async (req, res) => {
+  try {
+    const brandName = String(req.body?.brandName || '').trim();
+    const productName = String(req.body?.productName || '').trim();
+    if (!brandName || !productName) {
+      return res.status(400).json({ error: '브랜드명과 제품명은 필수입니다.' });
+    }
+    const created = await productsRepo.insertOne({
+      name: productName,
+      brandName,
+      productName,
+      campaignType: '공동구매',
+      category: '육아·키즈',
+      hookingPhrases: [],
+    });
+    res.json({ ok: true, product: created });
+  } catch (e) {
+    if (e.code === 'DUPLICATE_NAME') {
+      return res.status(409).json({ error: '이미 같은 관리명의 제품이 존재합니다.' });
+    }
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.post('/api/products/upload', upload.array('photos', 10), async (req, res) => {
   try {
     const files = [];
@@ -335,6 +419,25 @@ app.post('/api/influencers/:id/resolve', async (req, res) => {
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
+});
+
+// ─── 인스타그램 릴스 통계 API ───
+// [요청] 인스타그램 URL → 평균 릴스 통계 조회 (부가기능)
+const instagramScraper = require('./src/instagramScraper');
+
+app.post('/api/instagram/analyze', (req, res) => {
+  try {
+    const { profileUrl, mode } = req.body || {};
+    const job = instagramScraper.startAnalysis({ profileUrl, mode, count: 20 });
+    res.json({ ok: true, job });
+  } catch (e) {
+    if (e.code === 'ALREADY_RUNNING') return res.status(409).json({ error: e.message });
+    res.status(400).json({ error: e.message });
+  }
+});
+
+app.get('/api/instagram/status', (req, res) => {
+  res.json(instagramScraper.getStatus() || { status: 'idle' });
 });
 
 // ─── 매크로 실행 API ───

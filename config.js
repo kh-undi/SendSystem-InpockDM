@@ -45,6 +45,6 @@ module.exports = {
 
   MAIL_SUBJECT_PREFIX: '[언엑스 공동구매]',
   MAIL_SUBJECT_SUFFIX: '공동구매 제안 건',
-  // [요청] UI 설정에서 참조자 이메일 변경 가능
-  get MAIL_BCC() { return loadSettings().mailBcc || 'ym.jung@undefiancecorp.com'; },
+  // [요청] UI 설정에서 참조자 이메일 변경 가능 — 빈값 저장 시 BCC 없음(하드코딩 폴백 제거)
+  get MAIL_BCC() { return loadSettings().mailBcc || ''; },
 };

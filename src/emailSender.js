@@ -133,17 +133,19 @@ async function sendMail(emailAccount, influencer, product) {
 
   try {
     const transporter = createTransport(emailAccount);
-    const info = await transporter.sendMail({
+    // [요청] 참조자 이메일 빈값이면 BCC 키 자체 제외 — nodemailer에 빈 문자열 안 넘김
+    const mailOptions = {
       from: `"${emailAccount.senderName || emailAccount.email}" <${emailAccount.email}>`,
       to,
-      bcc: config.MAIL_BCC,
       subject: buildSubject(product),
       html: buildHtmlBody(product, emailAccount),
       attachments: [
         ...buildAttachments(product),
         ...buildSignatureAttachments(emailAccount),
       ],
-    });
+    };
+    if (config.MAIL_BCC) mailOptions.bcc = config.MAIL_BCC;
+    const info = await transporter.sendMail(mailOptions);
     console.log(`${label} 발송 성공! (messageId: ${info.messageId})`);
     return { success: true };
   } catch (error) {

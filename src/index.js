@@ -77,6 +77,17 @@ async function main() {
       console.log(`\n──── Gmail 발송 (${emailAccount.email}) ────`);
       for (const inf of emailTargets) {
         const product = productMap.get(inf.productName);
+
+        // [요청] 닉네임 == 예시 주인 계정 skip — 이메일 경로, 대소문자/공백 무시 매칭
+        const exampleOwner = (product.announceExampleOwner ?? '').trim().toLowerCase();
+        const nickname = (inf.nickname ?? '').trim().toLowerCase();
+        if (exampleOwner && exampleOwner === nickname) {
+          console.log(`[건너뜀] ${inf.nickname}: 예시 계정과 동일`);
+          totalFailed++;
+          await appendFailed({ ...inf, error: '예시 계정과 동일' });
+          continue;
+        }
+
         if (DRY_RUN) {
           console.log(`[DRY-RUN] 메일 발송 건너뜀: ${inf.nickname} → ${inf.profileUrl}`);
           totalSent++;
@@ -160,6 +171,16 @@ async function main() {
       while (queue.length > 0 && sentThisAccount < remaining) {
         const influencer = queue.shift();
         const product = productMap.get(influencer.productName);
+
+        // [요청] 닉네임 == 예시 주인 계정 skip — 인포크 경로 한정, 대소문자/공백 무시 매칭
+        const exampleOwner = (product.announceExampleOwner ?? '').trim().toLowerCase();
+        const nickname = (influencer.nickname ?? '').trim().toLowerCase();
+        if (exampleOwner && exampleOwner === nickname) {
+          console.log(`[건너뜀] ${influencer.nickname}: 예시 계정과 동일`);
+          totalFailed++;
+          await appendFailed({ ...influencer, error: '예시 계정과 동일' });
+          continue;
+        }
 
         // [요청] 발송 중 크래시 대비 — send 전 sending 상태로 전이 (DRY_RUN 제외)
         if (!DRY_RUN) await influencersRepo.markSending(influencer);

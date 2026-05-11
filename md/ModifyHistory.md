@@ -10,7 +10,134 @@
 [ 실행계획 ]
 
 
+
+
+
 [ 작업완료 ]
+## 이메일 발송도 닉네임 == 예시 주인 계정이면 skip (26.05.06)
+인포크 경로 skip 게이트를 이메일 경로에도 동일하게 적용. 인플루언서 닉네임과 `product.announceExampleOwner` 비교(양쪽 `trim().toLowerCase()`).
+- [src/index.js](src/index.js) 이메일 루프, `productMap.get(inf.productName)` 직후 `DRY_RUN` 분기 직전에 게이트 추가.
+- 매칭 시 `[건너뜀] {nickname}: 예시 계정과 동일` 로그 + `totalFailed++` + `appendFailed({error:'예시 계정과 동일'})` + `continue`. `markSending`/`sendMail`/속도제한대기 미호출.
+- `announceExampleOwner` 비어있으면 통과(정상 발송).
+- DRY-RUN에서도 동일 skip — 인포크 경로와 일관.
+- 인포크·이메일 양 경로에서 동일 사유 코드(`'예시 계정과 동일'`)로 실패 목록 등재 → UI "재발송 등록" 자연 동작.
+
+## 참조자 이메일 빈값 저장 시 하드코딩 폴백이 적용되는 버그 (26.05.06)
+설정에서 BCC를 비우면 발송 메일에도 BCC 빠지고, 값을 채워 저장하면 그 주소로 BCC 들어가도록 수정.
+- [config.js:49](config.js#L49) MAIL_BCC getter의 하드코딩 폴백(`'ym.jung@undefiancecorp.com'`) 제거 → `loadSettings().mailBcc || ''` 로 변경.
+- [src/emailSender.js](src/emailSender.js) `sendMail()`: `mailOptions` 객체를 먼저 만들고 `if (config.MAIL_BCC) mailOptions.bcc = config.MAIL_BCC;` 로 조건부 부착. nodemailer에 빈 문자열 bcc가 전달되지 않게.
+- 인포크(Playwright) 경로는 BCC와 무관 → 영향 없음.
+
+## 인포크 발송 — 닉네임 == 예시 주인 계정이면 skip (26.05.06)
+제품의 "예시 주인 계정"(`announceExampleOwner`)과 인플루언서 닉네임이 동일하면 인포크 경로에서 발송 중단, 실패 사유 `'예시 계정과 동일'`로 실패 목록에 노출(사용자 검토 후 수동 처리).
+- [src/index.js](src/index.js) 인포크 메인 루프, `queue.shift()` 직후 `markSending` 직전에 게이트 추가.
+- 비교: 양쪽 `trim().toLowerCase()` 후 정확매칭. `announceExampleOwner` 비어있으면 게이트 통과(정상 발송).
+- 매칭 시 `appendFailed({...influencer, error:'예시 계정과 동일'})` + `totalFailed++` + `continue` — `markSending`/`sendProposal`/`incrementSendCount` 미호출, 슬롯·주간카운터 영향 없음.
+- 적용 범위: 인포크 경로 한정. 이메일 경로/repo/스키마/UI 변경 없음.
+- DRY-RUN에서도 동일하게 skip.
+- UI 노출: 기존 실패 흐름(`influencersRepo.markFailed` → "확인 필요"/실패목록) 재사용 — "재발송 등록" 버튼 자연 동작.
+
+## 인스타분석 — 로그인 세션 안정화 (launchPersistentContext) (26.05.04)
+storageState 파일 캐시가 인스타 쿠키 로테이션을 못 잡아서 매번 재로그인되던 문제 해결. 디렉토리 단위 persistent context로 전환.
+- [src/instagramScraper.js](src/instagramScraper.js):
+  - `STATE_PATH`(파일) → `PROFILE_DIR`(`.instagram-profile/` 디렉토리)로 교체.
+  - `chromium.launch()` + `browser.newContext({ storageState })` → `chromium.launchPersistentContext(PROFILE_DIR, opts)` 단일 호출로 통합. 쿠키·localStorage·IndexedDB·서비스워커가 디스크에 자동 동기화돼서 쿠키 로테이션도 흡수됨.
+  - `launchPersistentContext`는 기본 페이지 1개를 자동 오픈 → `context.pages()[0]` 재사용.
+  - `ensureLoggedIn(page, creds)` 시그니처 단순화 — context 인자 제거, storageState read/write 분기 전부 제거. URL이 `/accounts/login`이면 `login()`, 아니면 그대로 통과.
+  - `runAnalysis()` finally: `context.close()`만 (browser 참조 폐기).
+- [.gitignore](.gitignore): `.instagram-state.json` → `.instagram-profile/` 로 교체.
+- 기존 `.instagram-state.json` 파일은 코드가 더 이상 안 읽으니 자연 폐기 (수동 삭제 가능).
+
+## 인스타그램 URL → 평균 릴스 통계 조회 (부가기능) (26.05.04)
+인플루언서 사전 검토용. 인스타 프로필 URL 입력 → 최근 20개 릴스의 평균 조회수/좋아요/댓글 산출.
+- **2개 모드 버튼**:
+  - `⚡ 빠른 분석 (조회수만)` — 릴스 그리드에서 카드 텍스트만 파싱(~1분).
+  - `전체 분석 (조회수+좋아요+댓글)` — 카드 1개씩 상세 페이지 진입(~5-8분).
+- **신규** [src/instagramSelectors.js](src/instagramSelectors.js) — 로그인/프로필/릴스 페이지 셀렉터 + post-login 모달 닫기 텍스트 후보. 인포크 [src/selectors.js](src/selectors.js) 패턴.
+- **신규** [src/instagramScraper.js](src/instagramScraper.js):
+  - 모듈 레벨 `currentJob` 싱글톤 — 동시 1건만 실행. server.js가 inline 호출(자식 프로세스 spawn 안 함).
+  - `startAnalysis({ profileUrl, mode, count = 20 })` / `getStatus()` / `isRunning()` export.
+  - 흐름: chromium launch (`config.HEADLESS` 따름) → storageState 캐시 시도 → `instagram.com/`로 검증 → 필요 시 로그인 → `/{username}/reels/` → 비공개 체크 → 카드 수집(스크롤 최대 8회) → 모드별 처리.
+  - 모드 'views': 각 카드 내 모든 span 텍스트 중 숫자 후보를 파싱, 최댓값을 조회수로 채택(좋아요 등 작은 숫자 배제).
+  - 모드 'full': 카드별 상세 진입 → og:description 메타 정규식 파싱(우선), 실패 시 `main` innerText 정규식 fallback. 조회수는 detail에서 못 잡으면 grid 폴백.
+  - `parseAbbreviatedNumber()`: `1.2K`/`1.2M`/`1.2만`/`1.2억`/`1,234` 모두 정수 정규화.
+  - `parseUsername()`: URL 또는 단일 username (`@` prefix 허용) 모두 수락.
+  - 로그 누적 (`currentJob.logs`, 최근 300줄) — UI 로그 영역에 노출.
+  - 로그인 세션 캐시: `.instagram-state.json` (gitignore 추가). 재로그인 비용 절감.
+- [server.js](server.js):
+  - `POST /api/instagram/analyze` — body `{ profileUrl, mode: 'views'|'full' }`. `ALREADY_RUNNING` → 409, validation 실패 → 400.
+  - `GET /api/instagram/status` — 폴링용. `currentJob` 그대로 반환(없으면 `{status:'idle'}`).
+- [public/index.html](public/index.html):
+  - 탭바에 `📊 인스타분석` 추가 + `panel-instagram` 패널.
+  - URL input + 빠른분석/전체분석 버튼 2개 + 소요시간 안내 텍스트.
+  - 진행 상태 박스(스피너 + currentStep + `진행: N/20`).
+  - 결과 카드: stat-card 톤. 모드 A는 1개(조회수), 모드 B는 3개(조회수/좋아요/댓글). 각 카드에 샘플 수 부기.
+  - 실패 시 빨간 에러 박스. 실행 로그는 `<details>`로 접힘.
+  - `syncInstaRunning()` 초기 호출 — 다른 탭/PC에서 실행 중이면 폴링 재개, 직전 결과 있으면 표시.
+  - `fmtInstaNum()` 표시 포맷: `1.2M` / `1.2만` / `1.2K`.
+  - 폴링 1.5초 주기. 완료/실패 시 폴링 중단 + 버튼 잠금 해제.
+  - 설정 패널에 "인스타분석 계정" 카드 신설 (외부 접속·실행 설정 카드 아래). ID/비번 입력 + 저장. 비번 빈값 저장 시 기존 값 유지(부분 업데이트). `loadSettings()`가 username 표시 + 저장된 비번 있으면 placeholder 변경.
+- [.gitignore](.gitignore): `.instagram-state.json` 추가.
+- **알려진 제약**:
+  - 인스타 DOM은 자주 바뀌므로 셀렉터/정규식이 깨질 수 있음 → [src/instagramSelectors.js](src/instagramSelectors.js) 한 곳만 수정 + 스크래퍼의 strategies 보강.
+  - 첫 로그인 시 인스타가 챌린지(2FA/캡차) 띄울 가능성 — 로그가 챌린지 URL을 보여주면 수동으로 한 번 해당 계정으로 인스타 로그인해서 챌린지 통과 후 재시도.
+  - 비공개 계정은 데이터 못 가져옴(에러 반환).
+  - 빈번 사용 시 계정 잠김 위험 → 적당히 사용.
+
+## 제품 저장 — 카드 단위로 (전체 products PUT 폐기) (26.04.29)
+저장 버튼이 해당 카드 1건만 DB 반영. 다른 카드 미완성이 다른 카드 저장 막던 구조 해소. "+ 제품 추가"는 메모리 stub UX 유지(첫 저장에서 insert 분기).
+- [src/repo/productsRepo.js](src/repo/productsRepo.js):
+  - `listSupabase` 반환에 `id` 추가, `listJson`은 `id=name` 부여(JSON 모드는 name이 unique).
+  - 공용 `toRow(product)` / `replacePhotosSupabase(productId, photos)` 헬퍼 신설.
+  - `insertOneSupabase` 사진 처리 추가(photos 배열 있으면 product_photos 같이 insert).
+  - `insertOneJson` 반환에 `id=name` 포함.
+  - `updateOne` / `removeOne` 신설(Supabase + JSON 양 모드). Supabase update는 NOT_FOUND(`PGRST116`) 표준화. JSON update는 이름 충돌 시 `DUPLICATE_NAME`.
+  - `replaceAllSupabase`는 마이그레이션용으로 그대로 유지.
+- [server.js](server.js):
+  - 신규 `POST /api/products` (정통 신규 추가, 풀 페이로드).
+  - 신규 `PUT /api/products/:id` (단건 update).
+  - 신규 `DELETE /api/products/:id` (단건 삭제).
+  - 공용 `validateProductBody()` — 5개 필수(name/brandName/productName/category/campaignType). USP/offerMessage 제외(빠른추가 row 호환).
+  - 기존 `PUT /api/products` (replaceAll)은 마이그레이션 호환용으로 유지.
+- [public/index.html](public/index.html):
+  - `saveProducts()` → `saveOneProduct(i)`. 카드 1건만 검증 후 id 유무로 POST/PUT 분기. 응답에서 id 갱신(JSON 모드 리네임 호환). 성공 시 dirty clear + renderProducts(뱃지 갱신).
+  - `removeProduct(i)`: confirm 통과 시 즉시 `DELETE /api/products/:id` 호출 후 splice(이전엔 splice만 + 저장버튼 의존). id 없는 stub은 splice만. openProductIdx 보정.
+  - `addProduct()`: 메모리 stub(id 없음) 유지 + 신규 카드를 즉시 dirty 마킹.
+  - 카드별 dirty 추적: 전역 `body.products-dirty` → `WeakSet dirtyProducts`로 product 객체 참조 추적. `markProductDirty(p)` / `clearProductDirty(p)` 헬퍼는 직접 DOM 클래스 토글(re-render 안 해서 입력 포커스 보존).
+  - CSS: `body.products-dirty .dirty-indicator` → `.product-card.dirty .dirty-indicator`.
+  - `productsList` input/change 위임: `closest('.product-card')` 로 카드 인덱스 추출 후 그 product만 dirty 마킹.
+  - 저장 버튼 onclick: `saveProducts()` → `saveOneProduct(${i})`.
+- 호환성: list()에 id가 추가됐지만 [src/index.js](src/index.js)·[scripts/testProductsRepo.js](scripts/testProductsRepo.js)는 list()를 readonly로만 사용 → 무영향.
+
+## 빠른추가 / 이미지 없음 product-card 시각 표시 (26.04.29)
+제품 카드 한눈에 식별. USP 비어있음 = "빠른추가", photos 비어있음 = "이미지 없음".
+- [public/index.html](public/index.html) CSS:
+  - `.product-card`에 `position:relative` 추가(absolute 뱃지 기준점).
+  - `.product-card.needs-attention { border-color:#a78bfa }` (연보라). `.editing`이 cascade 뒤라 펼친 상태에선 인디고 보더 우선.
+  - `.card-badges`: 카드 우측 상단 absolute(`top:20px; right:20px`), `pointer-events:none`로 클릭은 header로 패스스루(닫힌 카드 토글 보존).
+  - `.card-badge.badge-quick`: 보라톤 `#ede9fe / #6d28d9 / #c4b5fd`.
+  - `.card-badge.badge-no-photo`: 파랑톤 `#dbeafe / #1d4ed8 / #93c5fd`.
+- [public/index.html](public/index.html) `renderProducts()`:
+  - `isQuick = !p.usp`, `noPhoto = !(p.photos && p.photos.length > 0)` 카드별 산출.
+  - `needs-attention` 클래스 토글, 카드 div 첫 자식으로 `.card-badges` 마크업 조건부 렌더.
+- 룰: USP 비어있음 단일 조건(빠른추가 시그니처와 매칭, 일반 추가에서 USP 안 채운 미완성도 동일 노출).
+- 서버/repo/스키마 변경 없음.
+
+## 빠른 제품 추가 기능 (26.04.29)
+브랜드명·제품명만 입력해서 DB에 단건 즉시 추가. 관리명=제품명. 캠페인유형·카테고리는 기본값 미리 채움.
+- [public/index.html](public/index.html):
+  - actions-bar 버튼 순서 `검색 | ⚡ 빠른 추가 | + 제품 추가`로 변경.
+  - 모달 `#quickProductModal` 추가 — 브랜드명/제품명 input 2개 + `[취소]`/`[추가]` + ✕ + 배경 클릭 닫기. hookingModal과 같은 inline 스타일.
+  - 함수 `openQuickProductModal()` / `closeQuickProductModal()` / `applyQuickProductModal()` 신설. apply는 빈 값 차단 → 메모리 `products`에서 `name` 매칭으로 사전 중복 검사 → `POST /api/products/quick` → 성공 시 `loadProducts()` + 신규 카드 인덱스 찾아 `openProductIdx` 펼침. 실패 시 alert.
+- [server.js](server.js): `POST /api/products/quick` 엔드포인트. body `{brandName, productName}` 검증 → `productsRepo.insertOne({name=productName, brandName, productName, campaignType:'공동구매', category:'육아·키즈', hookingPhrases:[]})`. 중복은 409로 매핑.
+- [src/repo/productsRepo.js](src/repo/productsRepo.js): `insertOne(product)` 추가, 양 모드.
+  - Supabase: `insert(row).select().single()`. error.code='23505'는 `DUPLICATE_NAME` 표준화 throw.
+  - JSON: 동일 name 사전 체크 후 unshift + jsonSave.
+  - exports에 추가.
+- 스키마 변경 없음 — `products.name` unique constraint가 2차 방어선.
+- 정렬 보정: [src/repo/productsRepo.js](src/repo/productsRepo.js) `listSupabase` 정렬을 `id ASC` → `created_at DESC, id ASC`로 변경. 빠른 추가는 단건 insert라 신규 row가 가장 큰 id를 받아 맨 아래로 가던 문제 해결. replaceAll 일괄 insert는 같은 트랜잭션 → 동일 created_at → id ASC 타이브레이커로 메모리 순서 보존.
+
+
 ## 주간 카운트 증감 — 실수 방지 4단계 흐름 (26.04.29)
 실수 클릭 방지용 게이트. 평소엔 `[수동발송처리]` 버튼만, 모달 확인 후에만 ±1/수정완료 노출.
 - [public/index.html](public/index.html):

@@ -93,14 +93,21 @@
     .photo-upload-btn:hover { border-color: #6366f1; color: #6366f1; }
 
     /* 제품 카드 */
-    .product-card { border: 1.5px solid #e5e7eb; border-radius: 10px; padding: 20px; margin-bottom: 16px; }
+    .product-card { position: relative; border: 1.5px solid #e5e7eb; border-radius: 10px; padding: 20px; margin-bottom: 16px; }
+    .product-card.needs-attention { border-color: #a78bfa; }
     .product-card.editing { border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,0.1); }
     .product-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
     .product-name { font-size: 16px; font-weight: 700; }
 
-    /* [요청] 미저장 변경사항 표시 — body.products-dirty일 때만 노출 */
+    /* [요청] 빠른추가 / 이미지 없음 카드 우측 상단 뱃지 */
+    .card-badges { position: absolute; top: 20px; right: 20px; display: flex; gap: 6px; pointer-events: none; }
+    .card-badge { font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 500; line-height: 1.5; white-space: nowrap; }
+    .card-badge.badge-quick { background: #ede9fe; color: #6d28d9; border: 1px solid #c4b5fd; }
+    .card-badge.badge-no-photo { background: #dbeafe; color: #1d4ed8; border: 1px solid #93c5fd; }
+
+    /* [요청] 카드 단위 저장 — 카드별 dirty 표시(`.product-card.dirty`) */
     .dirty-indicator { display: none; color: #f59e0b; font-size: 12px; font-weight: 600; margin-right: 8px; align-self: center; }
-    body.products-dirty .dirty-indicator { display: inline; }
+    .product-card.dirty .dirty-indicator { display: inline; }
 
     /* 실행 패널 */
     .run-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 12px; }
@@ -134,6 +141,9 @@
       .tabs { overflow-x: auto; }
       .tab { white-space: nowrap; padding: 12px 16px; font-size: 13px; }
     }
+
+    /* [요청] 인스타분석 스피너 */
+    @keyframes insta-spin { to { transform: rotate(360deg); } }
   </style>
 </head>
 <body>
@@ -154,6 +164,8 @@
     <div class="tab" data-panel="influencers">인플루언서</div>
     <div class="tab" data-panel="run">실행</div>
     <div class="tab" data-panel="replies">답장 확인</div>
+    <!-- [요청] 인스타그램 URL → 평균 릴스 통계 조회 -->
+    <div class="tab" data-panel="instagram">📊 인스타분석(미완성)</div>
   </div>
 
   <div class="content">
@@ -197,6 +209,26 @@
         </div>
         <div class="form-group" style="max-width:460px;margin-top:16px">
           <button class="btn btn-outline btn-sm" onclick="doLogout()" id="logoutBtn" style="display:none">로그아웃</button>
+        </div>
+      </div>
+
+      <!-- [요청] 인스타분석 계정 — 인스타그램 릴스 통계 조회용 별도 계정 -->
+      <div class="card">
+        <div class="card-title">인스타분석 계정</div>
+        <p style="font-size:12px;color:#6b7280;margin-bottom:12px">
+          📊 인스타분석 탭에서 사용. 인포크/Gmail 계정과 분리된 인스타 전용 계정 1개 권장.<br>
+          ⚠ 너무 잦은 분석은 인스타 계정 잠김 위험이 있으니 적당히 사용해주세요.
+        </p>
+        <div class="form-group" style="max-width:460px">
+          <label>인스타 ID</label>
+          <input type="text" id="settingsInstagramUsername" placeholder="예: undefiance_insta">
+        </div>
+        <div class="form-group" style="max-width:460px">
+          <label>인스타 비밀번호</label>
+          <input type="password" id="settingsInstagramPassword" placeholder="비밀번호" autocomplete="new-password">
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-primary btn-sm" onclick="saveInstagramCreds()">저장</button>
         </div>
       </div>
 
@@ -248,6 +280,8 @@
           <div style="display:flex;gap:8px;align-items:center">
             <!-- [요청] 제품 검색 -->
             <input type="search" id="productSearch" placeholder="검색 (관리명·브랜드·제품명·카테고리·캠페인)" oninput="onProductSearchChange()" style="width:320px;padding:6px 12px;font-size:13px">
+            <!-- [요청] 빠른 제품 추가 -->
+            <button class="btn btn-outline btn-sm" onclick="openQuickProductModal()">⚡ 빠른 추가</button>
             <button class="btn btn-outline btn-sm" onclick="addProduct()">+ 제품 추가</button>
           </div>
         </div>
@@ -367,6 +401,41 @@
             <tbody id="sendingBody"></tbody>
           </table>
         </div>
+      </div>
+    </div>
+
+    <!-- ═══ 인스타그램 분석 ═══ -->
+    <!-- [요청] 인스타그램 URL → 평균 릴스 통계 조회 -->
+    <div class="panel" id="panel-instagram">
+      <div class="card">
+        <div class="card-title">📊 인스타그램 평균 릴스 통계</div>
+        <p style="font-size:13px;color:#6b7280;margin-bottom:16px">
+          인플루언서 사전 검토용. 인스타 프로필 URL을 입력하면 <b>최근 릴스 20개의 평균 통계</b>를 보여줍니다.<br>
+          <span style="color:#dc2626">⚠ 별도 인스타 계정 로그인이 필요합니다 (설정 → 인스타분석 계정).</span>
+        </p>
+        <div class="form-group" style="max-width:560px">
+          <label>인스타 프로필 URL</label>
+          <input type="text" id="instagramProfileUrl" placeholder="예: https://www.instagram.com/username/  또는  username">
+        </div>
+        <div class="btn-group" style="margin-bottom:16px">
+          <button class="btn btn-outline" id="btnInstaQuick" onclick="startInstaAnalyze('views')">⚡ 빠른 분석 (조회수만)</button>
+          <button class="btn btn-primary" id="btnInstaFull" onclick="startInstaAnalyze('full')">전체 분석 (조회수+좋아요+댓글)</button>
+          <span style="font-size:12px;color:#94a3b8;align-self:center;margin-left:8px">
+            빠른 분석 ~1분 / 전체 분석 ~5-8분
+          </span>
+        </div>
+        <div id="instaStatusBox" style="display:none;background:#eef2ff;border:1px solid #c7d2fe;border-radius:10px;padding:14px 18px;margin-bottom:16px">
+          <div style="display:flex;align-items:center;gap:10px;font-size:14px">
+            <div class="insta-spinner" style="width:16px;height:16px;border:2.5px solid #c7d2fe;border-top-color:#6366f1;border-radius:50%;animation:insta-spin 0.8s linear infinite"></div>
+            <span id="instaStatusStep">시작 중...</span>
+          </div>
+          <div style="margin-top:8px;font-size:12px;color:#6366f1" id="instaStatusProgress"></div>
+        </div>
+        <div id="instaResultBox" style="display:none"></div>
+        <details style="margin-top:16px">
+          <summary style="font-size:12px;color:#6b7280;cursor:pointer">실행 로그</summary>
+          <div class="log-area" id="instaLogArea" style="margin-top:8px;max-height:300px">대기 중...</div>
+        </details>
       </div>
     </div>
 
@@ -706,13 +775,30 @@
     async function loadProducts() {
       const res = await fetch('/api/products');
       products = await res.json();
+      dirtyProducts = new WeakSet(); // [요청] 카드 단위 저장 — 로드 직후 clean
       renderProducts();
-      clearProductsDirty(); // [요청] 미저장 표시 — 로드 직후 clean
     }
 
-    // [요청] 미저장 표시 — 전역 dirty 상태
-    function markProductsDirty() { document.body.classList.add('products-dirty'); }
-    function clearProductsDirty() { document.body.classList.remove('products-dirty'); }
+    // [요청] 카드 단위 저장 — 카드별 dirty 추적(WeakSet으로 product 객체 참조)
+    let dirtyProducts = new WeakSet();
+    function markProductDirty(p) {
+      if (!p || dirtyProducts.has(p)) return;
+      dirtyProducts.add(p);
+      const idx = products.indexOf(p);
+      if (idx !== -1) {
+        const card = document.getElementById(`product-${idx}`);
+        if (card) card.classList.add('dirty');
+      }
+    }
+    function clearProductDirty(p) {
+      if (!p) return;
+      dirtyProducts.delete(p);
+      const idx = products.indexOf(p);
+      if (idx !== -1) {
+        const card = document.getElementById(`product-${idx}`);
+        if (card) card.classList.remove('dirty');
+      }
+    }
 
     let openProductIdx = -1;
     // [요청] 후킹문구 아코디언 — product index 기반 펼침 상태
@@ -752,8 +838,17 @@
       container.innerHTML = matchedIndices.map(i => {
         const p = products[i];
         const isOpen = openProductIdx === i;
+        // [요청] 빠른추가/이미지 없음 판정 — USP 비어있음 = 빠른추가, photos 비어있음 = 이미지 없음
+        const isQuick = !p.usp;
+        const noPhoto = !(p.photos && p.photos.length > 0);
+        const needsAttention = isQuick || noPhoto;
+        const isDirty = dirtyProducts.has(p); // [요청] 카드 단위 저장
         return `
-        <div class="product-card ${isOpen ? 'editing' : ''}" id="product-${i}">
+        <div class="product-card ${needsAttention ? 'needs-attention' : ''} ${isOpen ? 'editing' : ''} ${isDirty ? 'dirty' : ''}" id="product-${i}">
+          ${(isQuick || noPhoto) ? `<div class="card-badges">
+            ${isQuick ? '<span class="card-badge badge-quick">빠른추가</span>' : ''}
+            ${noPhoto ? '<span class="card-badge badge-no-photo">이미지 없음</span>' : ''}
+          </div>` : ''}
           <div class="product-header" style="cursor:pointer" onclick="toggleProduct(${i})">
             <div style="display:flex;align-items:center;gap:10px">
               <span style="font-size:14px;color:#6b7280;transition:transform 0.2s;display:inline-block;transform:rotate(${isOpen?'90':'0'}deg)">&gt;</span>
@@ -765,7 +860,7 @@
             <div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:12px;align-items:center">
               <!-- [요청] 미저장 표시 -->
               <span class="dirty-indicator">● 미저장</span>
-              <button class="btn btn-primary btn-sm" onclick="event.stopPropagation();saveProducts()">저장</button>
+              <button class="btn btn-primary btn-sm" onclick="event.stopPropagation();saveOneProduct(${i})">저장</button>
               <button class="btn btn-danger btn-sm" onclick="event.stopPropagation();removeProduct(${i})">삭제</button>
             </div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
@@ -899,6 +994,50 @@
       renderProducts();
     }
 
+    // [요청] 빠른 제품 추가
+    function openQuickProductModal() {
+      document.getElementById('quickProductBrand').value = '';
+      document.getElementById('quickProductName').value = '';
+      const modal = document.getElementById('quickProductModal');
+      modal.style.display = 'flex';
+      setTimeout(() => document.getElementById('quickProductBrand').focus(), 0);
+    }
+    function closeQuickProductModal() {
+      document.getElementById('quickProductModal').style.display = 'none';
+    }
+    async function applyQuickProductModal() {
+      const brandName = document.getElementById('quickProductBrand').value.trim();
+      const productName = document.getElementById('quickProductName').value.trim();
+      if (!brandName || !productName) {
+        alert('브랜드명과 제품명을 모두 입력해주세요.');
+        return;
+      }
+      // 사전 중복 검사 — 메모리 products 배열의 관리명과 매칭
+      if (products.some(p => p.name === productName)) {
+        alert('이미 같은 관리명의 제품이 존재합니다.');
+        return;
+      }
+      const res = await fetch('/api/products/quick', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ brandName, productName }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(data.error || `추가 실패: ${res.status}`);
+        return;
+      }
+      // DB가 진실의 원천 — 전체 재로드 후 새 제품 카드 펼침
+      productSearchQuery = '';
+      const searchInput = document.getElementById('productSearch');
+      if (searchInput) searchInput.value = '';
+      await loadProducts();
+      const idx = products.findIndex(p => p.name === productName);
+      if (idx >= 0) openProductIdx = idx;
+      renderProducts();
+      closeQuickProductModal();
+    }
+
     function addProduct() {
       // [요청] 제품 검색 — 새 제품이 검색 필터에 가려지지 않도록 검색어 비움
       productSearchQuery = '';
@@ -926,7 +1065,7 @@
       });
       openProductIdx = 0;
       renderProducts();
-      markProductsDirty(); // [요청] 미저장 표시
+      markProductDirty(products[0]); // [요청] 카드 단위 저장 — 신규 stub은 첫 저장 전까지 dirty
     }
 
     // [요청] 제품 목록 필드 확장 — 후킹문구 가변 리스트
@@ -935,12 +1074,12 @@
       products[i].hookingPhrases.push('');
       hookingOpenIdx.add(i); // [요청] 후킹문구 아코디언 — 추가 시 자동 펼침
       renderProducts();
-      markProductsDirty(); // [요청] 미저장 표시
+      markProductDirty(products[i]);
     }
     function removeHookingPhrase(i, hi) {
       products[i].hookingPhrases.splice(hi, 1);
       renderProducts();
-      markProductsDirty(); // [요청] 미저장 표시
+      markProductDirty(products[i]);
     }
 
     // [요청] 후킹문구 일괄 붙여넣기 — 모달 제어
@@ -971,23 +1110,41 @@
         ? lines
         : target.hookingPhrases.concat(lines);
       hookingOpenIdx.add(currentHookingTarget); // [요청] 후킹문구 아코디언 — 일괄 입력 후 자동 펼침
-      markProductsDirty(); // [요청] 미저장 표시
+      markProductDirty(target);
       closeHookingModal();
       renderProducts();
     }
 
-    function removeProduct(i) {
+    // [요청] 카드 단위 저장 — 삭제 버튼은 confirm 통과 시 즉시 DB 삭제(저장 후순서 일관성).
+    async function removeProduct(i) {
       if (!confirm('이 제품을 삭제하시겠습니까?')) return;
+      const p = products[i];
+      if (p && p.id != null) {
+        let res;
+        try {
+          res = await fetch(`/api/products/${encodeURIComponent(p.id)}`, { method: 'DELETE' });
+        } catch (e) {
+          alert('삭제 실패(네트워크): ' + e.message);
+          return;
+        }
+        if (!res.ok) {
+          let msg = String(res.status);
+          try { const err = await res.json(); if (err && err.error) msg = err.error; } catch {}
+          alert('삭제 실패: ' + msg);
+          return;
+        }
+      }
+      if (p) dirtyProducts.delete(p);
       products.splice(i, 1);
+      if (openProductIdx === i) openProductIdx = -1;
+      else if (openProductIdx > i) openProductIdx--;
       renderProducts();
-      // [요청] 저장 버튼 명시 저장만 — 자동 saveProducts 제거
-      markProductsDirty(); // [요청] 미저장 표시
     }
 
     function removePhoto(pi, photoIdx) {
       products[pi].photos.splice(photoIdx, 1);
       renderProducts();
-      markProductsDirty(); // [요청] 미저장 표시
+      markProductDirty(products[pi]);
     }
 
     async function uploadPhotos(productIdx, files) {
@@ -1007,37 +1164,56 @@
       const data = await res.json();
       products[productIdx].photos = [...(products[productIdx].photos || []), ...data.files];
       renderProducts();
-      // [요청] 저장 버튼 명시 저장만 — 자동 saveProducts 제거
-      markProductsDirty(); // [요청] 미저장 표시
+      markProductDirty(products[productIdx]);
     }
 
-    async function saveProducts() {
-      // [요청] 제품 목록 필드 확장 — 메일제목 제외 기존 필드 필수 검증
+    // [요청] 카드 단위 저장 — 단일 카드만 검증 후 DB 반영. id 없으면 POST(insert), 있으면 PUT(update).
+    async function saveOneProduct(i) {
+      const p = products[i];
+      if (!p) return;
       const required = [
         ['name', '관리명'],
-        ['campaignType', '캠페인 유형'],
         ['brandName', '브랜드명'],
         ['productName', '제품명'],
         ['category', '카테고리'],
-        ['usp', '제품 특징(USP)'],
-        ['offerMessage', '제안/메일 내용'],
+        ['campaignType', '캠페인 유형'],
       ];
-      for (let i = 0; i < products.length; i++) {
-        const p = products[i];
-        for (const [key, label] of required) {
-          if (!String(p[key] || '').trim()) {
-            const who = p.name ? `[${p.name}]` : `(${i+1}번째 제품)`;
-            alert(`${who} '${label}' 항목이 비어있습니다.`);
-            openProductIdx = i;
-            renderProducts();
-            return;
-          }
+      for (const [key, label] of required) {
+        if (!String(p[key] || '').trim()) {
+          alert(`'${label}' 항목이 비어있습니다.`);
+          openProductIdx = i;
+          renderProducts();
+          return;
         }
       }
-      const res = await fetch('/api/products', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(products) });
-      if (!res.ok) { alert('저장 실패: ' + res.status); return; }
-      clearProductsDirty(); // [요청] 미저장 표시 — 저장 성공 시 clean
-      alert('제품 정보가 저장되었습니다.');
+      const isNew = p.id == null;
+      const url = isNew ? '/api/products' : `/api/products/${encodeURIComponent(p.id)}`;
+      const method = isNew ? 'POST' : 'PUT';
+      let res;
+      try {
+        res = await fetch(url, {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(p),
+        });
+      } catch (e) {
+        alert('저장 실패(네트워크): ' + e.message);
+        return;
+      }
+      if (!res.ok) {
+        let msg = String(res.status);
+        try { const err = await res.json(); if (err && err.error) msg = err.error; } catch {}
+        alert('저장 실패: ' + msg);
+        return;
+      }
+      // 응답에서 id 갱신 — JSON 모드에선 id=name이라 리네임 후 후속 저장이 깨지지 않도록.
+      try {
+        const data = await res.json();
+        if (data && data.product && data.product.id != null) p.id = data.product.id;
+      } catch {}
+      clearProductDirty(p);
+      renderProducts(); // 뱃지(빠른추가/이미지없음)·needs-attention 갱신
+      alert('저장되었습니다.');
     }
 
     // ═══════════════════════════════════════
@@ -1485,6 +1661,141 @@
     }
 
     // ═══════════════════════════════════════
+    //  인스타그램 분석
+    // ═══════════════════════════════════════
+    // [요청] 인스타그램 URL → 평균 릴스 통계 조회
+    let instaPollTimer = null;
+
+    function fmtInstaNum(n) {
+      if (n == null) return 'N/A';
+      if (n >= 1000000) return (n / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+      if (n >= 10000) return (n / 10000).toFixed(1).replace(/\.0$/, '') + '만';
+      if (n >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
+      return String(n);
+    }
+
+    async function startInstaAnalyze(mode) {
+      const url = document.getElementById('instagramProfileUrl').value.trim();
+      if (!url) { alert('인스타 프로필 URL을 입력해주세요.'); return; }
+      // 모드별 버튼 잠금
+      document.getElementById('btnInstaQuick').disabled = true;
+      document.getElementById('btnInstaFull').disabled = true;
+      document.getElementById('instaResultBox').style.display = 'none';
+      document.getElementById('instaStatusBox').style.display = 'block';
+      document.getElementById('instaStatusStep').textContent = '시작 중...';
+      document.getElementById('instaStatusProgress').textContent = '';
+      document.getElementById('instaLogArea').textContent = '';
+
+      try {
+        const res = await fetch('/api/instagram/analyze', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ profileUrl: url, mode }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.error || '분석 시작 실패');
+        }
+        startInstaPolling();
+      } catch (e) {
+        alert('오류: ' + e.message);
+        finishInstaUI();
+      }
+    }
+
+    function startInstaPolling() {
+      if (instaPollTimer) clearInterval(instaPollTimer);
+      pollInstaOnce();
+      instaPollTimer = setInterval(pollInstaOnce, 1500);
+    }
+
+    async function pollInstaOnce() {
+      try {
+        const res = await fetch('/api/instagram/status');
+        const job = await res.json();
+        if (!job || job.status === 'idle') {
+          finishInstaUI();
+          return;
+        }
+        // 진행 표시
+        document.getElementById('instaStatusStep').textContent = job.currentStep || '진행 중...';
+        const pg = job.total > 0 ? `${job.progress || 0} / ${job.total}` : '';
+        document.getElementById('instaStatusProgress').textContent = pg ? `진행: ${pg}` : '';
+        // 로그 (최근 20줄)
+        if (job.logs && job.logs.length) {
+          const logEl = document.getElementById('instaLogArea');
+          logEl.textContent = job.logs.slice(-50).join('\n');
+          logEl.scrollTop = logEl.scrollHeight;
+        }
+        if (job.status === 'done') {
+          renderInstaResult(job.result);
+          finishInstaUI();
+        } else if (job.status === 'error') {
+          renderInstaError(job.error);
+          finishInstaUI();
+        }
+      } catch (e) {
+        // 통신 일시 실패는 무시 (다음 폴링에서 재시도)
+      }
+    }
+
+    function finishInstaUI() {
+      if (instaPollTimer) { clearInterval(instaPollTimer); instaPollTimer = null; }
+      document.getElementById('btnInstaQuick').disabled = false;
+      document.getElementById('btnInstaFull').disabled = false;
+      document.getElementById('instaStatusBox').style.display = 'none';
+    }
+
+    function renderInstaResult(r) {
+      if (!r) return;
+      const card = (label, value, sub) => `
+        <div class="stat-card" style="background:linear-gradient(135deg,#eef2ff,#f5f3ff)">
+          <div class="stat-value" style="font-size:30px">${esc(fmtInstaNum(value))}</div>
+          <div class="stat-label" style="font-weight:600">${esc(label)}</div>
+          ${sub ? `<div style="font-size:11px;color:#9ca3af;margin-top:4px">${esc(sub)}</div>` : ''}
+        </div>`;
+      const cards = [];
+      cards.push(card('평균 조회수', r.avgViews, `샘플 ${r.sampleCount}개`));
+      if (r.mode === 'full') {
+        cards.push(card('평균 좋아요', r.avgLikes, `샘플 ${r.likesSampleCount}개`));
+        cards.push(card('평균 댓글', r.avgComments, `샘플 ${r.commentsSampleCount}개`));
+      }
+      const box = document.getElementById('instaResultBox');
+      box.style.display = 'block';
+      box.innerHTML = `
+        <div style="font-size:13px;color:#6b7280;margin-bottom:10px">
+          <b>@${esc(r.targetUsername)}</b> · ${r.mode === 'full' ? '전체 분석' : '빠른 분석'} · ${fmtKst(r.sampledAt)}
+        </div>
+        <div class="run-stats">${cards.join('')}</div>
+      `;
+    }
+
+    function renderInstaError(msg) {
+      const box = document.getElementById('instaResultBox');
+      box.style.display = 'block';
+      box.innerHTML = `
+        <div style="background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;border-radius:10px;padding:14px 18px;font-size:14px">
+          <b>분석 실패</b><br>${esc(msg)}
+        </div>`;
+    }
+
+    // 페이지 로드 후 진행 중 작업이 있으면 폴링 재개 (다중 PC 동기화)
+    async function syncInstaRunning() {
+      try {
+        const res = await fetch('/api/instagram/status');
+        const job = await res.json();
+        if (job && job.status === 'running') {
+          document.getElementById('btnInstaQuick').disabled = true;
+          document.getElementById('btnInstaFull').disabled = true;
+          document.getElementById('instaStatusBox').style.display = 'block';
+          startInstaPolling();
+        } else if (job && job.status === 'done' && job.result) {
+          renderInstaResult(job.result);
+        }
+      } catch {}
+    }
+
+    // ═══════════════════════════════════════
     //  유틸
     // ═══════════════════════════════════════
     function esc(s) { return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
@@ -1510,6 +1821,37 @@
       // [요청] 외부 배포 — headless 토글 반영
       const hd = document.getElementById('settingsHeadless');
       if (hd) hd.checked = !!data.headless;
+      // [요청] 인스타분석 계정 — ID는 표시, 비밀번호는 마스킹/공란
+      const insta = data.instagram || {};
+      const igu = document.getElementById('settingsInstagramUsername');
+      if (igu) igu.value = insta.username || '';
+      const igp = document.getElementById('settingsInstagramPassword');
+      if (igp) igp.placeholder = insta.password ? '저장된 비밀번호 (변경 시에만 입력)' : '비밀번호';
+    }
+
+    // [요청] 인스타분석 계정 저장
+    async function saveInstagramCreds() {
+      const username = document.getElementById('settingsInstagramUsername').value.trim();
+      const passwordInput = document.getElementById('settingsInstagramPassword');
+      const password = passwordInput.value;
+      // 기존 settings 읽어서 instagram만 부분 업데이트 (비번 빈값 = 기존 유지)
+      const cur = await (await fetch('/api/settings')).json();
+      const curInsta = cur.instagram || {};
+      const next = {
+        username,
+        password: password ? password : (curInsta.password || ''),
+      };
+      if (!next.username || !next.password) {
+        alert('ID와 비밀번호를 모두 입력해주세요.');
+        return;
+      }
+      await fetch('/api/settings', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ instagram: next }),
+      });
+      passwordInput.value = '';
+      passwordInput.placeholder = '저장된 비밀번호 (변경 시에만 입력)';
+      alert('인스타분석 계정이 저장되었습니다.');
     }
 
     async function saveSettings() {
@@ -1562,13 +1904,16 @@
     loadEmailAccounts();
     loadProducts();
     loadInfluencers();
-    // [요청] 미저장 표시 — productsList 내 모든 input/select/textarea 변경 감지
-    document.getElementById('productsList').addEventListener('input', e => {
-      if (e.target.matches('input, textarea, select')) markProductsDirty();
-    });
-    document.getElementById('productsList').addEventListener('change', e => {
-      if (e.target.matches('input, textarea, select')) markProductsDirty();
-    });
+    // [요청] 카드 단위 저장 — 입력 발생한 카드만 dirty 마킹
+    function dirtyFromEvent(e) {
+      if (!e.target.matches('input, textarea, select')) return;
+      const card = e.target.closest('.product-card');
+      if (!card) return;
+      const idx = parseInt(card.id.replace('product-', ''), 10);
+      if (!isNaN(idx) && products[idx]) markProductDirty(products[idx]);
+    }
+    document.getElementById('productsList').addEventListener('input', dirtyFromEvent);
+    document.getElementById('productsList').addEventListener('change', dirtyFromEvent);
     loadRunStats();
     loadFailed();
     // [요청] 발송 중 크래시 대비 — 초기 로드
@@ -1576,6 +1921,8 @@
     // [요청] 다중 PC 접속 시 매크로 실행 상태 동기화 — 초기 로드
     syncMacroRunning();
     pollReplies();
+    // [요청] 인스타분석 — 다중 PC / 새로고침 시 진행 중 작업 동기화
+    syncInstaRunning();
   </script>
 
   <!-- [요청] 후킹문구 일괄 붙여넣기 — 모달 -->
@@ -1612,6 +1959,29 @@
       <div style="display:flex;gap:8px;justify-content:flex-end">
         <button class="btn btn-outline btn-sm" onclick="closeHookingModal()">취소</button>
         <button class="btn btn-primary btn-sm" onclick="applyHookingModal()">적용</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- [요청] 빠른 제품 추가 -->
+  <div id="quickProductModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center" onclick="if(event.target===this)closeQuickProductModal()">
+    <div style="background:white;border-radius:12px;padding:24px;max-width:480px;width:90%;display:flex;flex-direction:column;gap:14px;box-shadow:0 10px 40px rgba(0,0,0,0.2)">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <h3 style="margin:0;font-size:18px">빠른 제품 추가</h3>
+        <button class="btn btn-sm" style="background:transparent;color:#6b7280;padding:4px 8px" onclick="closeQuickProductModal()">✕</button>
+      </div>
+      <div style="font-size:13px;color:#6b7280">관리명은 입력한 "제품명"으로 자동 설정됩니다 (추후 수정 가능).</div>
+      <div class="form-group">
+        <label>브랜드명 <span style="color:#ef4444">*</span></label>
+        <input id="quickProductBrand" type="text" placeholder="예: ABC컴퍼니">
+      </div>
+      <div class="form-group">
+        <label>제품명 <span style="color:#ef4444">*</span></label>
+        <input id="quickProductName" type="text" placeholder="예: 신제품 영양제">
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn btn-outline btn-sm" onclick="closeQuickProductModal()">취소</button>
+        <button class="btn btn-primary btn-sm" onclick="applyQuickProductModal()">추가</button>
       </div>
     </div>
   </div>
