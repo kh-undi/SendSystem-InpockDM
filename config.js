@@ -41,6 +41,8 @@ module.exports = {
     influencers: path.resolve(__dirname, 'influencers.csv'),
     logs: path.resolve(__dirname, 'logs'),
     screenshots: path.resolve(__dirname, 'screenshots'),
+    // [요청] 리드 관리 탭 신설 — JSON 폴백 경로
+    leads: path.resolve(__dirname, 'leads.json'),
   },
 
   MAIL_SUBJECT_PREFIX: '[언엑스 공동구매]',

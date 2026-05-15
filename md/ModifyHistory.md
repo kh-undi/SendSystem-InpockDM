@@ -7,13 +7,78 @@
 [ 요청사항 ]
 
 
-[ 실행계획 ]
-
-
 
 
 
 [ 작업완료 ]
+## 모달 바깥 클릭으로 닫히지 않게 — ESC / X 버튼만 닫기 (공통 UI) (26.05.14)
+실수로 backdrop 클릭해 입력 내용이 날아가는 일이 잦아, 4개 모달 모두 ESC 키와 우상단 ✕ 버튼으로만 닫히도록 통일.
+
+- 대상: [public/index.html](public/index.html)의 `#manualSendModal`, `#hookingModal`, `#leadModal`, `#quickProductModal`.
+- wrapper 4개의 `onclick="if(event.target===this)close...()"` 속성 제거 → 바깥 클릭 무반응. 공통 셀렉터용으로 `class="modal-backdrop"` 부여 (기존 inline style 그대로).
+- 공통 ESC 핸들러 1개 추가 (스크립트 끝):
+  - `MODAL_CLOSERS` 맵으로 id → close 함수 매핑.
+  - `keydown`에서 `Escape` 감지 시 `display !== 'none'`인 `.modal-backdrop`을 수집해 **마지막(가장 위)** 1개만 닫음. 중첩 모달 대비.
+  - `e.stopPropagation()`로 다른 ESC 리스너 간섭 차단.
+- 비변경: X / 취소 / 저장·적용 버튼 로직, CSS 모두 그대로.
+
+## 리드 관리 탭 신설 — 답장 온 인플루언서 추적 (26.05.12)
+답장 확인 우측에 신규 탭 "리드 관리". 답장 온 인플루언서를 기록 → 제안서 발송일+3일 자동 리마인드 → 어울릴만한 제품/최종 결과까지 한 탭에서 관리.
+
+- **DB 스키마** [scripts/schema.sql](scripts/schema.sql):
+  - 신규 테이블 `leads` 추가. 컬럼: `id serial pk`, `nickname text not null`, `profile_url text`, `interested_product_name text` (FK 안 검 — 제품 리네임/삭제와 분리), `suitable_product_note text`, `replied_at date`, `proposal_sent_at date`, `remind_at date`, `final_status text check in ('pending','거절','공구진행','무응답') default 'pending'`, `notes text`, `created_at`, `updated_at`.
+  - 인덱스 `idx_leads_remind (final_status, remind_at)` — due 리마인드 조회 가속.
+  - ⚠️ **운영 Supabase는 SQL Editor에서 아래 DDL 1회 실행 필요**:
+    ```sql
+    create table if not exists leads (
+      id                       serial      primary key,
+      nickname                 text        not null,
+      profile_url              text,
+      interested_product_name  text,
+      suitable_product_note    text,
+      replied_at               date,
+      proposal_sent_at         date,
+      remind_at                date,
+      final_status             text        not null default 'pending'
+                               check (final_status in ('pending','거절','공구진행','무응답')),
+      notes                    text,
+      created_at               timestamptz not null default now(),
+      updated_at               timestamptz not null default now()
+    );
+    create index if not exists idx_leads_remind on leads(final_status, remind_at);
+    ```
+
+- **Repo 레이어** [src/repo/leadsRepo.js](src/repo/leadsRepo.js) 신규 (productsRepo 패턴):
+  - `list()` / `insertOne()` / `updateOne(id)` / `removeOne(id)` / `listDueReminders(today)`. `ALLOWED_STATUSES` export.
+  - Supabase + JSON 분기 (`config.USE_SUPABASE`). JSON 폴백 경로: `leads.json` ([config.js](config.js) `PATHS.leads` 신규).
+  - `normalizeIncoming()`이 `remind_at` 미지정 시 `proposal_sent_at + 3일` 자동 보정 (서버측 이중 안전).
+  - `final_status` 화이트리스트 외 값은 `sanitizeStatus()`가 `'pending'`으로 강제.
+  - JSON 모드: id 자동 부여, `created_at` ISO 문자열로 저장, 최신순 정렬.
+
+- **Server API** [server.js](server.js):
+  - `GET /api/leads`, `POST /api/leads` (nickname 필수), `PUT /api/leads/:id`, `DELETE /api/leads/:id`.
+  - `GET /api/leads/reminders-due` — `{count, leads, logs}` 반환.
+  - node-cron 매일 `0 9 * * *` — `checkLeadReminders()` 호출. 결과를 `leadsLogs` 버퍼(최근 200줄) + 콘솔에 출력. 텔레그램/이메일 푸시는 보유 채널 미정으로 이번 범위 제외, 함수 분리해 후속에서 1줄 추가만으로 푸시 붙일 수 있도록 함.
+
+- **UI** [public/index.html](public/index.html):
+  - 탭바 `panel-replies` ↔ `panel-instagram` 사이에 `<div class="tab" data-panel="leads">리드 관리 <span class="leads-due-badge">N</span></div>` 추가. due 카운트 0이면 뱃지 숨김.
+  - 신규 `<div class="panel" id="panel-leads">`:
+    - `[+ 리드 추가]` 버튼 + 필터 select(전체/리마인드 필요/진행 중/완료).
+    - due 카운트 > 0이면 상단에 노란 안내 박스.
+    - 테이블 8컬럼: 닉네임 | 관심 제품 | 제안서 발송일 | 관심 연락일 | 리마인드 필요일 | 어울릴만한 제품 | 최종 결과 | [수정]/[삭제].
+    - due 행은 `.due` 클래스(`#fef3c7` 배경 + 빨간 좌측 막대).
+  - 리드 편집 모달 `#leadModal` — hookingModal 패턴. 폼: 닉네임 / 프로필URL / 관심제품(`<select>`에서 products로부터 옵션 동적 생성, 메모리에 없는 이름은 "(목록 외)"로 보존) / 관심 연락일 / 제안서 발송일 / 리마인드 필요일 / 최종 결과 / 어울릴만한 제품(textarea) / 메모.
+  - 폼 인터랙션: `proposal_sent_at` 변경 시 `remind_at`이 비어있거나 `dataset.auto==='1'`이면 +3일 자동 채움. 사용자가 `remind_at`을 직접 수정하면 `auto` 해제 → 이후 발송일 바뀌어도 덮어쓰지 않음.
+  - `loadLeads()` 초기 호출 + 60초 폴링 + 탭 진입 시 즉시 재로드.
+  - CSS: `.leads-due-badge`(빨간 칩), `.leads-table tr.due`, `.lead-status-*` 4종(pending/거절/공구진행/무응답 컬러칩).
+
+- **CLAUDE.md**: 데이터 소스 섹션 — 테이블 수 9→10, `leads` 라인 추가, JSON 폴백 스키마에 `leads.json` 라인 추가, `influencers.status` 옵션에 `sending` 표기 보정.
+
+- **알려진 한계 / 후속 작업**:
+  - 답장 확인 탭과의 자동 연동 없음 — 1차는 수동 입력 전용. `checkReplies.js`는 sendbird-badge 카운트만 알지 누가 답장했는지는 모르므로 후속에서 "리드로 등록" 버튼/플로우 검토.
+  - 어울릴만한 제품(`suitable_product_note`)은 자유 텍스트 필드 — 사용 패턴 보고 향후 구조화(다중 select, 우선순위 등) 검토.
+  - 리마인드 알림은 서버 콘솔 + UI 뱃지·강조뿐. 텔레그램/이메일 푸시 채널 결정 후 `checkLeadReminders()` 내부에 호출 1줄 추가하면 됨.
+
 ## 이메일 발송도 닉네임 == 예시 주인 계정이면 skip (26.05.06)
 인포크 경로 skip 게이트를 이메일 경로에도 동일하게 적용. 인플루언서 닉네임과 `product.announceExampleOwner` 비교(양쪽 `trim().toLowerCase()`).
 - [src/index.js](src/index.js) 이메일 루프, `productMap.get(inf.productName)` 직후 `DRY_RUN` 분기 직전에 게이트 추가.

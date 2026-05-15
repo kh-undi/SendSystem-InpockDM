@@ -185,7 +185,36 @@ create table if not exists replies (
 create index if not exists idx_replies_run on replies(run_id, checked_at);
 
 ------------------------------------------------------------
--- 9. settings : key-value (mailBcc, adminPassword 등)
+-- 9. leads : 답장 온 인플루언서 추적 (리드 관리)
+--   [요청] 리드 관리 탭 신설 (답장 온 인플루언서 추적)
+--   - replied_at: 인플루언서가 관심있다고 연락 온 날짜
+--   - proposal_sent_at: 제안서 발송일
+--   - remind_at: 리마인드 필요일 (기본 = proposal_sent_at + 3일, 사용자 override 가능)
+--   - final_status: pending / 거절 / 공구진행 / 무응답
+--   - interested_product_name: 관심 보인 제품 이름 (FK 안 검 — 제품 리네임/삭제와 분리)
+--   - suitable_product_note: 어울릴만한 제품 (포맷 미정, 자유 텍스트)
+------------------------------------------------------------
+create table if not exists leads (
+  id                       serial      primary key,
+  nickname                 text        not null,
+  profile_url              text,
+  interested_product_name  text,
+  suitable_product_note    text,
+  replied_at               date,
+  proposal_sent_at         date,
+  remind_at                date,
+  final_status             text        not null default 'pending'
+                           check (final_status in ('pending','거절','공구진행','무응답')),
+  notes                    text,
+  created_at               timestamptz not null default now(),
+  updated_at               timestamptz not null default now()
+);
+
+create index if not exists idx_leads_remind
+  on leads(final_status, remind_at);
+
+------------------------------------------------------------
+-- 10. settings : key-value (mailBcc, adminPassword 등)
 ------------------------------------------------------------
 create table if not exists settings (
   key         text        primary key,

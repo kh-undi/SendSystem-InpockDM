@@ -96,13 +96,14 @@ UI에서 "발송 시작"을 누르면 [server.js](server.js)가 `node src/index.
 
 ### Supabase (기본)
 
-[scripts/schema.sql](scripts/schema.sql)이 전체 DDL. 9개 테이블:
+[scripts/schema.sql](scripts/schema.sql)이 전체 DDL. 10개 테이블:
 - `accounts` + `weekly_tracking` (발송 계정 / 주간 카운터)
 - `email_accounts` (Gmail 계정·서명)
 - `products` + `product_photos` (제품·사진 URL)
-- `influencers` (발송 큐 + 실패 기록 통합, `status=pending|sent|failed|skipped`)
+- `influencers` (발송 큐 + 실패 기록 통합, `status=pending|sent|failed|skipped|sending`)
 - `sent_log` (append-only 감사 로그)
 - `reply_runs` + `replies` (답장 확인)
+- `leads` (답장 온 인플루언서 추적 — replied_at/proposal_sent_at/remind_at/final_status)
 - Storage 버킷: `product-photos`, `signatures` (모두 public)
 - RPC: `increment_weekly_count(account_id, week_key)` — 원자적 카운터 증가
 
@@ -114,6 +115,7 @@ UI에서 "발송 시작"을 누르면 [server.js](server.js)가 `node src/index.
 - `products.json`: `{products: [{name, brandName, productName, campaignType, category, usp, offerMessage, photos[], mailSubject?}]}`
 - `influencers.json` / `failed.json`: `{nickname, profileUrl, productName, [error]}`
 - `replies.json`: `{checkedAt, partial, results[]}`
+- `leads.json`: `{leads: [{id, nickname, profileUrl, interestedProductName, suitableProductNote, repliedAt, proposalSentAt, remindAt, finalStatus, notes, ...}]}`
 
 ### 설정 파일 (양쪽 모드 공통)
 

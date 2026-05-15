@@ -1,5 +1,9 @@
 {
-  "mailBcc": "ym.jung@undefiancecorp.com",
+  "mailBcc": "ym.jung@undefianceco",
   "adminPassword": "djsel1!",
-  "headless": false
+  "headless": false,
+  "instagram": {
+    "username": "unx_judy",
+    "password": "djsdprtm1!"
+  }
 }

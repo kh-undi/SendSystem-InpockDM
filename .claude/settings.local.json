@@ -54,7 +54,14 @@
       "Bash(node -c server.js)",
       "Bash(node -c src/index.js)",
       "Bash(node -c src/repo/influencersRepo.js)",
-      "Bash(node --check src/repo/influencersRepo.js)"
+      "Bash(node --check src/repo/influencersRepo.js)",
+      "Bash(node -e \"const s = require\\('./src/instagramScraper'\\); console.log\\('ok:', Object.keys\\(s\\)\\); console.log\\('parse1:', s.parseAbbreviatedNumber\\('1.2K'\\)\\); console.log\\('parse2:', s.parseAbbreviatedNumber\\('1.5만'\\)\\); console.log\\('parse3:', s.parseAbbreviatedNumber\\('1,234'\\)\\); console.log\\('user1:', s.parseUsername\\('https://www.instagram.com/cristiano/'\\)\\); console.log\\('user2:', s.parseUsername\\('cristiano'\\)\\); console.log\\('user3:', s.parseUsername\\('https://www.instagram.com/cristiano/reels/'\\)\\);\")",
+      "Bash(node -e \"const s = require\\('./src/instagramScraper'\\); console.log\\('user1:', s.parseUsername\\('https://www.instagram.com/cristiano/'\\)\\); console.log\\('user2:', s.parseUsername\\('cristiano'\\)\\); console.log\\('user3:', s.parseUsername\\('@cristiano'\\)\\); console.log\\('user4:', s.parseUsername\\('https://www.instagram.com/cristiano/reels/'\\)\\); console.log\\('user5:', s.parseUsername\\('reels'\\)\\); console.log\\('user6:', s.parseUsername\\(''\\)\\);\")",
+      "Bash(node -e \"process.env.NODE_ENV='test'; const fs = require\\('fs'\\); const path = require\\('path'\\); try { require\\('./server.js'\\); } catch\\(e\\) { console.error\\('LOAD ERROR:', e.message\\); process.exit\\(1\\); } setTimeout\\(\\(\\) => { console.log\\('server loaded ok, exiting'\\); process.exit\\(0\\); }, 1500\\);\")",
+      "Bash(curl -s -i http://localhost:3000/api/instagram/status)",
+      "Bash(node --check src/instagramScraper.js)",
+      "Bash(node --check src/instagramSelectors.js)",
+      "Bash(node -e \"const s = require\\('./src/instagramScraper'\\); console.log\\('exports:', Object.keys\\(s\\)\\);\")"
     ]
   }
 }

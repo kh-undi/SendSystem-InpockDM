@@ -578,6 +578,110 @@ app.get('/api/replies/status', async (req, res) => {
   }
 });
 
+// ─── 리드 관리 API ───
+// [요청] 리드 관리 탭 신설 (답장 온 인플루언서 추적)
+const leadsRepo = require('./src/repo/leadsRepo');
+let leadsLogs = [];
+
+function pushLeadsLog(line) {
+  const ts = new Date().toISOString().replace('T', ' ').slice(0, 19);
+  leadsLogs.push(`[${ts}] ${line}`);
+  // 최근 200줄 유지
+  if (leadsLogs.length > 200) leadsLogs = leadsLogs.slice(-200);
+  console.log(`[리드] ${line}`);
+}
+
+app.get('/api/leads', async (req, res) => {
+  try {
+    res.json(await leadsRepo.list());
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/leads', async (req, res) => {
+  try {
+    if (!String(req.body?.nickname || '').trim()) {
+      return res.status(400).json({ error: '닉네임은 필수입니다.' });
+    }
+    const finalStatus = req.body?.finalStatus;
+    if (finalStatus && !leadsRepo.ALLOWED_STATUSES.includes(finalStatus)) {
+      return res.status(400).json({ error: '허용되지 않는 최종 결과 값입니다.' });
+    }
+    const created = await leadsRepo.insertOne(req.body);
+    res.json({ ok: true, lead: created });
+  } catch (e) {
+    if (e.code === 'NICKNAME_REQUIRED') {
+      return res.status(400).json({ error: '닉네임은 필수입니다.' });
+    }
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.put('/api/leads/:id', async (req, res) => {
+  try {
+    if (!String(req.body?.nickname || '').trim()) {
+      return res.status(400).json({ error: '닉네임은 필수입니다.' });
+    }
+    const finalStatus = req.body?.finalStatus;
+    if (finalStatus && !leadsRepo.ALLOWED_STATUSES.includes(finalStatus)) {
+      return res.status(400).json({ error: '허용되지 않는 최종 결과 값입니다.' });
+    }
+    const updated = await leadsRepo.updateOne(req.params.id, req.body);
+    res.json({ ok: true, lead: updated });
+  } catch (e) {
+    if (e.code === 'NICKNAME_REQUIRED') {
+      return res.status(400).json({ error: '닉네임은 필수입니다.' });
+    }
+    if (e.code === 'NOT_FOUND') {
+      return res.status(404).json({ error: '해당 리드를 찾을 수 없습니다.' });
+    }
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.delete('/api/leads/:id', async (req, res) => {
+  try {
+    await leadsRepo.removeOne(req.params.id);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get('/api/leads/reminders-due', async (req, res) => {
+  try {
+    const list = await leadsRepo.listDueReminders();
+    res.json({ count: list.length, leads: list, logs: leadsLogs });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// [요청] 리드 관리 탭 신설 — 매일 09:00 리마인드 due 콘솔/leadsLogs 기록.
+//   향후 텔레그램/이메일 푸시는 이 함수에서 1줄 추가만으로 붙일 수 있도록 분리해둠.
+async function checkLeadReminders() {
+  try {
+    const due = await leadsRepo.listDueReminders();
+    if (!due.length) {
+      pushLeadsLog('리마인드 필요 없음');
+      return;
+    }
+    pushLeadsLog(`리마인드 ${due.length}건 필요:`);
+    due.forEach(l => {
+      const product = l.interestedProductName ? ` (${l.interestedProductName})` : '';
+      pushLeadsLog(`  - ${l.nickname}${product} · 제안서 ${l.proposalSentAt || '?'} · 리마인드 ${l.remindAt}`);
+    });
+  } catch (e) {
+    pushLeadsLog(`리마인드 체크 실패: ${e.message}`);
+  }
+}
+
+cron.schedule('0 9 * * *', () => {
+  console.log('[크론] 리드 리마인드 체크 시작');
+  checkLeadReminders();
+});
+
 // ─── 매일 오전,오후 총 5번 자동 답장확인 ───
 cron.schedule('30 8,10,12,14,16 * * 1-5', () => {
   if (replyProcess || macroProcess) {

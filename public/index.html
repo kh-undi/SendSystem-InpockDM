@@ -144,6 +144,24 @@
 
     /* [요청] 인스타분석 스피너 */
     @keyframes insta-spin { to { transform: rotate(360deg); } }
+
+    /* [요청] 리드 관리 탭 신설 */
+    .leads-due-badge { background:#ef4444; color:#fff; font-size:11px; padding:1px 7px; border-radius:10px; margin-left:6px; font-weight:700; }
+    .leads-table { width:100%; border-collapse:collapse; }
+    .leads-table th { background:#f9fafb; padding:10px 8px; text-align:left; font-size:12px; font-weight:700; color:#6b7280; border-bottom:2px solid #e5e7eb; white-space:nowrap; }
+    .leads-table td { padding:10px 8px; border-bottom:1px solid #f3f4f6; font-size:13px; vertical-align:middle; }
+    .leads-table tr:hover { background:#f9fafb; }
+    .leads-table tr.due { background:#fef3c7; border-left:3px solid #ef4444; }
+    .leads-table tr.due:hover { background:#fde68a; }
+    .leads-table .lead-status { display:inline-block; font-size:11px; padding:2px 8px; border-radius:10px; font-weight:600; }
+    .lead-status-pending { background:#e0e7ff; color:#4338ca; }
+    .lead-status-거절 { background:#fee2e2; color:#b91c1c; }
+    .lead-status-공구진행 { background:#d1fae5; color:#065f46; }
+    .lead-status-무응답 { background:#f3f4f6; color:#4b5563; }
+    .leads-empty { text-align:center; padding:40px; color:#9ca3af; font-size:14px; }
+    .leads-filter-bar { display:flex; gap:12px; align-items:center; margin-bottom:12px; flex-wrap:wrap; }
+    .leads-filter-bar select { width:auto; min-width:140px; }
+    .leads-due-summary { background:#fef3c7; border:1px solid #fde68a; border-radius:8px; padding:10px 14px; margin-bottom:12px; font-size:13px; color:#92400e; }
   </style>
 </head>
 <body>
@@ -164,6 +182,8 @@
     <div class="tab" data-panel="influencers">인플루언서</div>
     <div class="tab" data-panel="run">실행</div>
     <div class="tab" data-panel="replies">답장 확인</div>
+    <!-- [요청] 리드 관리 탭 신설 — 답장 확인 우측 -->
+    <div class="tab" data-panel="leads">리드 관리 <span class="leads-due-badge" id="leadsDueBadge" style="display:none">0</span></div>
     <!-- [요청] 인스타그램 URL → 평균 릴스 통계 조회 -->
     <div class="tab" data-panel="instagram">📊 인스타분석(미완성)</div>
   </div>
@@ -460,6 +480,48 @@
       </div>
     </div>
 
+    <!-- ═══ 리드 관리 ═══ -->
+    <!-- [요청] 리드 관리 탭 신설 (답장 온 인플루언서 추적) -->
+    <div class="panel" id="panel-leads">
+      <div class="card">
+        <div class="actions-bar">
+          <div class="card-title">리드 관리 <span class="count" id="leadsCount">0</span></div>
+          <div class="btn-group">
+            <button class="btn btn-primary btn-sm" onclick="openLeadModal(null)">+ 리드 추가</button>
+          </div>
+        </div>
+        <p style="font-size:13px;color:#6b7280;margin-bottom:12px">답장 온 인플루언서를 기록하고 제안서 발송일+3일에 자동으로 리마인드 안내를 받습니다. 매일 09:00에 리마인드 due 항목이 서버 로그에 출력됩니다.</p>
+        <div id="leadsDueSummary"></div>
+        <div class="leads-filter-bar">
+          <label style="margin-bottom:0">필터</label>
+          <select id="leadsFilter" onchange="renderLeads()">
+            <option value="all">전체</option>
+            <option value="due">리마인드 필요</option>
+            <option value="pending">진행 중 (pending)</option>
+            <option value="done">완료 (거절/공구진행/무응답)</option>
+          </select>
+          <span style="font-size:12px;color:#9ca3af" id="leadsFilterCount"></span>
+        </div>
+        <div style="overflow-x:auto">
+          <table class="leads-table" id="leadsTable">
+            <thead>
+              <tr>
+                <th>닉네임</th>
+                <th>관심 제품</th>
+                <th>제안서 발송일</th>
+                <th>관심 연락일</th>
+                <th>리마인드 필요일</th>
+                <th>어울릴만한 제품</th>
+                <th>최종 결과</th>
+                <th style="width:120px">액션</th>
+              </tr>
+            </thead>
+            <tbody id="leadsBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
   </div>
 
   <script>
@@ -484,6 +546,10 @@
         if (tab.dataset.panel === 'replies') {
           document.getElementById('headerReplyBadge').style.display = 'none';
           localStorage.setItem('repliesSeenAt', new Date().toISOString());
+        }
+        // [요청] 리드 관리 탭 진입 시 최신 데이터 재로드
+        if (tab.dataset.panel === 'leads') {
+          loadLeads();
         }
       });
     });
@@ -1923,11 +1989,233 @@
     pollReplies();
     // [요청] 인스타분석 — 다중 PC / 새로고침 시 진행 중 작업 동기화
     syncInstaRunning();
+    // [요청] 리드 관리 — 초기 로드 + 폴링
+    loadLeads();
+    setInterval(loadLeads, 60000);
+
+    // ═══════════════════════════════════════
+    //  [요청] 리드 관리
+    // ═══════════════════════════════════════
+    let leads = [];
+
+    function todayIso() {
+      const d = new Date();
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    }
+
+    function addDaysIso(iso, days) {
+      if (!iso) return '';
+      const d = new Date(iso + 'T00:00:00');
+      if (isNaN(d.getTime())) return '';
+      d.setDate(d.getDate() + days);
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    }
+
+    function isDue(lead, todayStr) {
+      return lead.finalStatus === 'pending' && lead.remindAt && lead.remindAt <= todayStr;
+    }
+
+    async function loadLeads() {
+      try {
+        const res = await fetch('/api/leads');
+        if (!res.ok) return;
+        leads = await res.json();
+        renderLeads();
+        updateLeadsBadge();
+      } catch {}
+    }
+
+    function updateLeadsBadge() {
+      const today = todayIso();
+      const dueCount = leads.filter(l => isDue(l, today)).length;
+      const badge = document.getElementById('leadsDueBadge');
+      if (!badge) return;
+      if (dueCount > 0) {
+        badge.textContent = dueCount;
+        badge.style.display = 'inline-block';
+      } else {
+        badge.style.display = 'none';
+      }
+    }
+
+    function renderLeads() {
+      const today = todayIso();
+      const filter = document.getElementById('leadsFilter')?.value || 'all';
+      let filtered = leads.slice();
+      if (filter === 'due') {
+        filtered = filtered.filter(l => isDue(l, today));
+      } else if (filter === 'pending') {
+        filtered = filtered.filter(l => l.finalStatus === 'pending');
+      } else if (filter === 'done') {
+        filtered = filtered.filter(l => l.finalStatus !== 'pending');
+      }
+
+      document.getElementById('leadsCount').textContent = leads.length;
+      document.getElementById('leadsFilterCount').textContent =
+        filter === 'all' ? '' : `(${filtered.length}/${leads.length})`;
+
+      const dueCount = leads.filter(l => isDue(l, today)).length;
+      const summary = document.getElementById('leadsDueSummary');
+      if (dueCount > 0) {
+        summary.innerHTML = `<div class="leads-due-summary">⏰ 리마인드 필요한 리드 <b>${dueCount}건</b> — 제안서 발송 후 3일이 경과했습니다.</div>`;
+      } else {
+        summary.innerHTML = '';
+      }
+
+      const tbody = document.getElementById('leadsBody');
+      if (!filtered.length) {
+        tbody.innerHTML = `<tr><td colspan="8" class="leads-empty">${leads.length === 0 ? '등록된 리드가 없습니다. "+ 리드 추가"로 시작하세요.' : '필터에 해당하는 리드가 없습니다.'}</td></tr>`;
+        return;
+      }
+      tbody.innerHTML = filtered.map(l => {
+        const due = isDue(l, today);
+        const statusClass = `lead-status-${l.finalStatus || 'pending'}`;
+        const statusLabel = l.finalStatus === 'pending' ? '진행 중' : l.finalStatus;
+        return `<tr class="${due ? 'due' : ''}">
+          <td><b>${esc(l.nickname || '')}</b>${l.profileUrl ? `<br><a href="${esc(l.profileUrl)}" target="_blank" style="font-size:11px;color:#6b7280">${esc(l.profileUrl)}</a>` : ''}</td>
+          <td>${esc(l.interestedProductName || '-')}</td>
+          <td>${esc(l.proposalSentAt || '-')}</td>
+          <td>${esc(l.repliedAt || '-')}</td>
+          <td>${due ? `<b style="color:#b91c1c">${esc(l.remindAt)}</b>` : esc(l.remindAt || '-')}</td>
+          <td style="max-width:200px;white-space:pre-wrap;color:#6b7280;font-size:12px">${esc(l.suitableProductNote || '-')}</td>
+          <td><span class="lead-status ${statusClass}">${esc(statusLabel || '진행 중')}</span></td>
+          <td>
+            <button class="btn btn-outline btn-sm" onclick="openLeadModal(${l.id})">수정</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteLead(${l.id})">삭제</button>
+          </td>
+        </tr>`;
+      }).join('');
+    }
+
+    let editingLeadId = null;
+    function openLeadModal(id) {
+      editingLeadId = id;
+      const lead = id ? leads.find(l => l.id === id) : null;
+
+      // 관심 제품 select 옵션 채우기 (products 메모리에서)
+      const productSelect = document.getElementById('leadProduct');
+      const currentVal = lead?.interestedProductName || '';
+      productSelect.innerHTML =
+        '<option value="">— 선택 안함 —</option>' +
+        (products || []).map(p => `<option value="${esc(p.name)}">${esc(p.name)}</option>`).join('');
+      // 메모리에 없는 제품명도 보존 (이전에 등록한 제품이 삭제됐을 수 있음)
+      if (currentVal && !products.some(p => p.name === currentVal)) {
+        productSelect.innerHTML += `<option value="${esc(currentVal)}" selected>${esc(currentVal)} (목록 외)</option>`;
+      }
+      productSelect.value = currentVal;
+
+      document.getElementById('leadModalTitle').textContent = id ? '리드 수정' : '리드 추가';
+      document.getElementById('leadNickname').value = lead?.nickname || '';
+      document.getElementById('leadProfileUrl').value = lead?.profileUrl || '';
+      document.getElementById('leadRepliedAt').value = lead?.repliedAt || todayIso();
+      document.getElementById('leadProposalSentAt').value = lead?.proposalSentAt || '';
+      document.getElementById('leadRemindAt').value = lead?.remindAt || '';
+      document.getElementById('leadFinalStatus').value = lead?.finalStatus || 'pending';
+      document.getElementById('leadSuitableNote').value = lead?.suitableProductNote || '';
+      document.getElementById('leadNotes').value = lead?.notes || '';
+
+      // [요청] 리드 관리 — proposal_sent_at 변경 시 remind_at 자동 미리채움 (사용자가 덮어쓸 수 있음)
+      document.getElementById('leadProposalSentAt').onchange = function() {
+        const remindInput = document.getElementById('leadRemindAt');
+        // 사용자가 이미 직접 채워둔 경우엔 건드리지 않음 (단, 비어있거나 자동 계산값과 같으면 갱신)
+        if (!remindInput.value || remindInput.dataset.auto === '1') {
+          remindInput.value = addDaysIso(this.value, 3);
+          remindInput.dataset.auto = '1';
+        }
+      };
+      document.getElementById('leadRemindAt').onchange = function() {
+        // 사용자가 직접 수정하면 auto 해제
+        this.dataset.auto = '';
+      };
+      // 초기값이 자동 계산식과 일치하는지 마크
+      const auto = lead?.proposalSentAt && lead?.remindAt === addDaysIso(lead.proposalSentAt, 3);
+      document.getElementById('leadRemindAt').dataset.auto = auto ? '1' : '';
+
+      document.getElementById('leadModal').style.display = 'flex';
+      setTimeout(() => document.getElementById('leadNickname').focus(), 0);
+    }
+
+    function closeLeadModal() {
+      document.getElementById('leadModal').style.display = 'none';
+      editingLeadId = null;
+    }
+
+    async function saveLead() {
+      const nickname = document.getElementById('leadNickname').value.trim();
+      if (!nickname) {
+        alert('닉네임은 필수입니다.');
+        return;
+      }
+      const payload = {
+        nickname,
+        profileUrl: document.getElementById('leadProfileUrl').value.trim(),
+        interestedProductName: document.getElementById('leadProduct').value,
+        repliedAt: document.getElementById('leadRepliedAt').value || null,
+        proposalSentAt: document.getElementById('leadProposalSentAt').value || null,
+        remindAt: document.getElementById('leadRemindAt').value || null,
+        finalStatus: document.getElementById('leadFinalStatus').value,
+        suitableProductNote: document.getElementById('leadSuitableNote').value.trim(),
+        notes: document.getElementById('leadNotes').value.trim(),
+      };
+      const url = editingLeadId ? `/api/leads/${editingLeadId}` : '/api/leads';
+      const method = editingLeadId ? 'PUT' : 'POST';
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(data.error || `저장 실패: ${res.status}`);
+        return;
+      }
+      closeLeadModal();
+      await loadLeads();
+    }
+
+    async function deleteLead(id) {
+      const lead = leads.find(l => l.id === id);
+      if (!confirm(`"${lead?.nickname || ''}" 리드를 삭제할까요?`)) return;
+      const res = await fetch(`/api/leads/${id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        alert(data.error || `삭제 실패: ${res.status}`);
+        return;
+      }
+      await loadLeads();
+    }
+
+    // [요청] ESC로만 닫기 공통 핸들러 — 바깥 클릭 닫힘 제거된 .modal-backdrop 대상
+    const MODAL_CLOSERS = {
+      manualSendModal: closeManualSendModal,
+      hookingModal: closeHookingModal,
+      leadModal: closeLeadModal,
+      quickProductModal: closeQuickProductModal,
+    };
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      const open = Array.from(document.querySelectorAll('.modal-backdrop'))
+        .filter(el => el.style.display && el.style.display !== 'none');
+      if (open.length === 0) return;
+      const top = open[open.length - 1];
+      const closer = MODAL_CLOSERS[top.id];
+      if (closer) {
+        e.stopPropagation();
+        closer();
+      }
+    });
   </script>
 
   <!-- [요청] 후킹문구 일괄 붙여넣기 — 모달 -->
   <!-- [요청] 수동발송처리 4단계 — 확인 모달 -->
-  <div id="manualSendModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center" onclick="if(event.target===this)closeManualSendModal()">
+  <!-- [요청] 모달 바깥클릭 닫힘 제거 — ESC/X로만 -->
+  <div id="manualSendModal" class="modal-backdrop" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center">
     <div style="background:white;border-radius:12px;padding:24px;max-width:420px;width:90%;display:flex;flex-direction:column;gap:14px;box-shadow:0 10px 40px rgba(0,0,0,0.2)">
       <div style="display:flex;justify-content:space-between;align-items:center">
         <h3 style="margin:0;font-size:18px">수동 발송 보정</h3>
@@ -1944,7 +2232,8 @@
     </div>
   </div>
 
-  <div id="hookingModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center" onclick="if(event.target===this)closeHookingModal()">
+  <!-- [요청] 모달 바깥클릭 닫힘 제거 — ESC/X로만 -->
+  <div id="hookingModal" class="modal-backdrop" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center">
     <div style="background:white;border-radius:12px;padding:24px;max-width:600px;width:90%;max-height:80vh;display:flex;flex-direction:column;gap:14px;box-shadow:0 10px 40px rgba(0,0,0,0.2)">
       <div style="display:flex;justify-content:space-between;align-items:center">
         <h3 style="margin:0;font-size:18px">후킹문구 일괄 입력</h3>
@@ -1963,8 +2252,69 @@
     </div>
   </div>
 
+  <!-- [요청] 리드 관리 탭 신설 — 리드 추가/수정 모달 -->
+  <!-- [요청] 모달 바깥클릭 닫힘 제거 — ESC/X로만 -->
+  <div id="leadModal" class="modal-backdrop" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center">
+    <div style="background:white;border-radius:12px;padding:24px;max-width:640px;width:92%;max-height:90vh;overflow-y:auto;display:flex;flex-direction:column;gap:12px;box-shadow:0 10px 40px rgba(0,0,0,0.2)">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <h3 id="leadModalTitle" style="margin:0;font-size:18px">리드 추가</h3>
+        <button class="btn btn-sm" style="background:transparent;color:#6b7280;padding:4px 8px" onclick="closeLeadModal()">✕</button>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group" style="margin-bottom:0">
+          <label>닉네임 <span style="color:#ef4444">*</span></label>
+          <input id="leadNickname" type="text" placeholder="예: @nickname 또는 인플루언서명">
+        </div>
+        <div class="form-group" style="margin-bottom:0">
+          <label>프로필 URL / 이메일</label>
+          <input id="leadProfileUrl" type="text" placeholder="https://... 또는 someone@example.com">
+        </div>
+      </div>
+      <div class="form-group" style="margin-bottom:0">
+        <label>관심 제품</label>
+        <select id="leadProduct"></select>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
+        <div class="form-group" style="margin-bottom:0">
+          <label>관심 연락일</label>
+          <input id="leadRepliedAt" type="date">
+        </div>
+        <div class="form-group" style="margin-bottom:0">
+          <label>제안서 발송일</label>
+          <input id="leadProposalSentAt" type="date">
+        </div>
+        <div class="form-group" style="margin-bottom:0">
+          <label>리마인드 필요일 <span style="font-size:11px;color:#9ca3af;font-weight:400">(발송일+3일 자동)</span></label>
+          <input id="leadRemindAt" type="date">
+        </div>
+      </div>
+      <div class="form-group" style="margin-bottom:0">
+        <label>최종 결과</label>
+        <select id="leadFinalStatus">
+          <option value="pending">진행 중 (pending)</option>
+          <option value="공구진행">공구진행</option>
+          <option value="거절">거절</option>
+          <option value="무응답">무응답</option>
+        </select>
+      </div>
+      <div class="form-group" style="margin-bottom:0">
+        <label>어울릴만한 제품 <span style="font-size:11px;color:#9ca3af;font-weight:400">(자유 입력 — 포맷 추후 결정)</span></label>
+        <textarea id="leadSuitableNote" rows="2" placeholder="예: ABC제품, XYZ제품"></textarea>
+      </div>
+      <div class="form-group" style="margin-bottom:0">
+        <label>메모</label>
+        <textarea id="leadNotes" rows="3" placeholder="자유 메모"></textarea>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px">
+        <button class="btn btn-outline btn-sm" onclick="closeLeadModal()">취소</button>
+        <button class="btn btn-primary btn-sm" onclick="saveLead()">저장</button>
+      </div>
+    </div>
+  </div>
+
   <!-- [요청] 빠른 제품 추가 -->
-  <div id="quickProductModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center" onclick="if(event.target===this)closeQuickProductModal()">
+  <!-- [요청] 모달 바깥클릭 닫힘 제거 — ESC/X로만 -->
+  <div id="quickProductModal" class="modal-backdrop" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center">
     <div style="background:white;border-radius:12px;padding:24px;max-width:480px;width:90%;display:flex;flex-direction:column;gap:14px;box-shadow:0 10px 40px rgba(0,0,0,0.2)">
       <div style="display:flex;justify-content:space-between;align-items:center">
         <h3 style="margin:0;font-size:18px">빠른 제품 추가</h3>
