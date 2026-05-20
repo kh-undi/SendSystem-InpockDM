@@ -19,6 +19,7 @@
 
 
 
+
 [ 작업완료 ]
 ## 추천 카탈로그 공개 페이지 — 로그인 없이 접근 허용 (26.05.20)
 [server.js:43](server.js#L43) `authRequired` 미들웨어에 `if (req.path.startsWith('/recommend')) return next();` 한 줄 추가. `/favicon.ico` 예외 패턴 그대로. ngrok 경유 시 `/recommend/?c=<code>`가 `/login`으로 리다이렉트되어 인플루언서가 카탈로그 못 보던 문제 해결. 노출 범위는 `/recommend/` 폴더 정적 4개 파일 + Supabase `get_catalog_by_code` RPC(정확한 code 알아야 1건씩 조회) — 관리 UI/`/api/*`/`/assets/*`는 인증 유지. Vercel 분리 배포본과 동일 정책으로 맞춤.
