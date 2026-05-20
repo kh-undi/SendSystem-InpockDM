@@ -40,6 +40,7 @@ function authRequired(req, res, next) {
   const password = readSettingsSrv().adminPassword;
   if (!password) return next();                     // 비번 미설정 → auth 비활성
   if (req.path === '/favicon.ico') return next();   // favicon은 인증 없이 허용 (로그인 페이지 탭 아이콘)
+  if (req.path.startsWith('/recommend')) return next(); // [요청] 추천 카탈로그 공개 페이지 — 링크만 있으면 인증 없이 열람
   if (req.session && req.session.authenticated) return next();
   // API 호출은 401, 그 외는 /login으로 리다이렉트
   if (req.path.startsWith('/api/')) {

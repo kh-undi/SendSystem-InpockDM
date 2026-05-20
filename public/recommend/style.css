@@ -217,10 +217,11 @@ main {
 .modal-section-body a:hover { text-decoration: underline; }
 .modal-section-body ul { padding-left: 20px; }
 .modal-section-body li { margin-bottom: 2px; }
-.modal-section .divider {
+/* [요청] hr.divider가 .modal-section 형제로 렌더되어 후손 셀렉터가 안 먹던 문제 → hr.divider 직접 매칭 + 마진 확대 */
+.modal-body hr.divider {
   border: none;
   border-top: 1px solid #f3f4f6;
-  margin: 20px 0;
+  margin: 28px 0;
 }
 
 body.modal-open { overflow: hidden; }

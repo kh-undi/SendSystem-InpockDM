@@ -20,6 +20,12 @@
 
 
 [ 작업완료 ]
+## 추천 카탈로그 공개 페이지 — 로그인 없이 접근 허용 (26.05.20)
+[server.js:43](server.js#L43) `authRequired` 미들웨어에 `if (req.path.startsWith('/recommend')) return next();` 한 줄 추가. `/favicon.ico` 예외 패턴 그대로. ngrok 경유 시 `/recommend/?c=<code>`가 `/login`으로 리다이렉트되어 인플루언서가 카탈로그 못 보던 문제 해결. 노출 범위는 `/recommend/` 폴더 정적 4개 파일 + Supabase `get_catalog_by_code` RPC(정확한 code 알아야 1건씩 조회) — 관리 UI/`/api/*`/`/assets/*`는 인증 유지. Vercel 분리 배포본과 동일 정책으로 맞춤.
+
+## 추천 카탈로그 모달 — divider 마진 부족 (26.05.20)
+[public/recommend/style.css:220](public/recommend/style.css#L220) 셀렉터 `.modal-section .divider` → `.modal-body hr.divider`로 교체. 기존 셀렉터는 후손 매칭이라 형제로 렌더되는 `<hr class="divider">`([public/recommend/catalog.js:152](public/recommend/catalog.js#L152))를 못 잡아서 브라우저 기본 hr 스타일로 떨어지던 문제 해결. 마진도 20px → 28px로 확대해 "콘텐츠 포인트"와 "제안 내용" 섹션 사이 시각 분리 강화.
+
 ## URL 복사 후 "복사완료!" 토스트 (26.05.20)
 [public/index.html:199](public/index.html#L199) `.toast` CSS 신설(하단 중앙 고정, fade+slide 0.2s 트랜지션). [public/index.html:2400](public/index.html#L2400) `showToast(message)` 헬퍼 — 동일 노드 재사용, 1.6s 후 자동 hide, 연속 호출 시 타이머 리셋. `copyText()`의 success 콜백을 silent → `showToast('복사완료!')`로 교체. 카탈로그 목록 [복사], 모달 [📋 URL 복사], `copyResultUrl()` 모두 자동 적용.
 
