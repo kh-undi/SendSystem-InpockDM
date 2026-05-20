@@ -222,6 +222,112 @@ create table if not exists settings (
   updated_at  timestamptz not null default now()
 );
 
+------------------------------------------------------------
+-- 11. catalogs : 인플루언서 맞춤 추천 카탈로그
+--   [요청] 추천 카탈로그 페이지 — 인플루언서별 큐레이션 공유 링크
+--   - code: 공개 URL용 short code (6~8자리 base64url). 이 값으로만 외부 조회 가능.
+--   - product_ids: 선택된 제품 id 배열 (JSONB). 드래그로 정한 순서가 그대로 노출 순서.
+--   - lead_id: 선택적 리드 연결 (nullable). 리드 외 임의 닉네임도 허용.
+--   - 한 인플루언서에게 N개 카탈로그 가능 (unique 제약 없음, 차수별/시즌별 변형 의도된 패턴).
+------------------------------------------------------------
+create table if not exists catalogs (
+  id                   serial      primary key,
+  code                 text        not null unique,
+  title                text,
+  influencer_nickname  text        not null,
+  lead_id              int         references leads(id) on delete set null,
+  product_ids          jsonb       not null default '[]'::jsonb,
+  view_count           int         not null default 0,
+  viewed_at            timestamptz,
+  created_at           timestamptz not null default now()
+);
+
+create index if not exists idx_catalogs_code      on catalogs(code);
+create index if not exists idx_catalogs_nickname  on catalogs(influencer_nickname);
+
+-- [요청] 추천 카탈로그 페이지 — 공개 URL용 RPC
+--   Vercel 배포된 공개 페이지가 anon 키로 이 함수만 호출. SECURITY DEFINER로 RLS 우회.
+--   code 일치 시 view_count +1, viewed_at 갱신, 제품+사진을 product_ids 순서대로 JSON 반환.
+--   미존재 시 null 반환.
+create or replace function get_catalog_by_code(p_code text)
+returns json
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  cat catalogs%rowtype;
+  result json;
+begin
+  update catalogs
+     set view_count = view_count + 1,
+         viewed_at = now()
+   where code = p_code
+  returning * into cat;
+
+  if not found then
+    return null;
+  end if;
+
+  with ordered_ids as (
+    select t.elem::int as pid, t.idx as ord
+      from jsonb_array_elements_text(cat.product_ids) with ordinality as t(elem, idx)
+  ),
+  prods as (
+    select
+      p.id, p.name, p.brand_name, p.product_name, p.campaign_type,
+      p.category, p.usp, p.offer_message, p.product_link,
+      p.announce_example_link, p.memo, p.age_range,
+      o.ord,
+      coalesce(
+        (select json_agg(pp.url order by pp.sort_order)
+           from product_photos pp where pp.product_id = p.id),
+        '[]'::json
+      ) as photos
+    from products p
+    join ordered_ids o on o.pid = p.id
+  )
+  select json_build_object(
+    'code',               cat.code,
+    'title',              cat.title,
+    'influencerNickname', cat.influencer_nickname,
+    'viewCount',          cat.view_count,
+    'products', coalesce(
+      (select json_agg(
+        json_build_object(
+          'id',                  id,
+          'name',                name,
+          'brandName',           brand_name,
+          'productName',         product_name,
+          'campaignType',        campaign_type,
+          'category',            category,
+          'usp',                 usp,
+          'offerMessage',        offer_message,
+          'productLink',         product_link,
+          'announceExampleLink', announce_example_link,
+          'memo',                memo,
+          'ageRange',            age_range,
+          'photos',              photos
+        ) order by ord
+      ) from prods),
+      '[]'::json
+    )
+  ) into result;
+
+  return result;
+end;
+$$;
+
+-- anon 역할은 RPC 실행만 허용 (테이블 직접 SELECT 차단됨)
+grant execute on function get_catalog_by_code(text) to anon;
+
+-- catalogs/products/product_photos에 RLS 활성화.
+--   anon은 정책이 없어서 직접 SELECT 불가, RPC(SECURITY DEFINER)만 통과.
+--   service_role은 RLS 항상 우회 → 기존 server.js/admin UI 동작 무영향.
+alter table catalogs       enable row level security;
+alter table products       enable row level security;
+alter table product_photos enable row level security;
+
 -- [요청] 제품 목록 필드 확장 — 기존 테이블용 마이그레이션
 --   이미 배포된 DB는 위의 create table if not exists가 no-op이므로,
 --   아래 ALTER를 SQL Editor에서 한 번 실행해야 새 컬럼이 추가됨.

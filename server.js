@@ -39,6 +39,7 @@ app.use(session({
 function authRequired(req, res, next) {
   const password = readSettingsSrv().adminPassword;
   if (!password) return next();                     // 비번 미설정 → auth 비활성
+  if (req.path === '/favicon.ico') return next();   // favicon은 인증 없이 허용 (로그인 페이지 탭 아이콘)
   if (req.session && req.session.authenticated) return next();
   // API 호출은 401, 그 외는 /login으로 리다이렉트
   if (req.path.startsWith('/api/')) {
@@ -653,6 +654,55 @@ app.get('/api/leads/reminders-due', async (req, res) => {
   try {
     const list = await leadsRepo.listDueReminders();
     res.json({ count: list.length, leads: list, logs: leadsLogs });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ─── 추천 카탈로그 API ───
+// [요청] 추천 카탈로그 페이지 — 인플루언서별 큐레이션 공유 링크
+const catalogsRepo = require('./src/repo/catalogsRepo');
+
+app.get('/api/catalogs', async (req, res) => {
+  try {
+    res.json(await catalogsRepo.list());
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/catalogs', async (req, res) => {
+  try {
+    const created = await catalogsRepo.insertOne(req.body);
+    res.json({ ok: true, catalog: created });
+  } catch (e) {
+    if (e.code === 'NICKNAME_REQUIRED') {
+      return res.status(400).json({ error: '닉네임은 필수입니다.' });
+    }
+    if (e.code === 'PRODUCTS_REQUIRED') {
+      return res.status(400).json({ error: '제품을 1개 이상 선택해야 합니다.' });
+    }
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// [요청] 기존 카탈로그 수정 — code(공개 URL)·view_count 보존, 제품 목록·제목·닉네임·leadId만 갱신
+app.put('/api/catalogs/:id', async (req, res) => {
+  try {
+    const updated = await catalogsRepo.updateOne(req.params.id, req.body);
+    res.json({ ok: true, catalog: updated });
+  } catch (e) {
+    if (e.code === 'NICKNAME_REQUIRED') return res.status(400).json({ error: '닉네임은 필수입니다.' });
+    if (e.code === 'PRODUCTS_REQUIRED') return res.status(400).json({ error: '제품을 1개 이상 선택해야 합니다.' });
+    if (e.code === 'NOT_FOUND') return res.status(404).json({ error: '카탈로그를 찾을 수 없습니다.' });
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.delete('/api/catalogs/:id', async (req, res) => {
+  try {
+    await catalogsRepo.removeOne(req.params.id);
+    res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

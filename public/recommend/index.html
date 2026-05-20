@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex,nofollow">
+  <title>공동구매 제안</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="loading" class="state-msg">불러오는 중…</div>
+  <div id="error" class="state-msg" style="display:none"></div>
+
+  <main id="catalog" style="display:none">
+    <header class="hero">
+      <div class="brand-row">
+        <span class="brand-mark">UNX</span>
+        <span class="brand-label">공동구매 제품</span>
+      </div>
+      <h1 id="catalogTitle"></h1>
+    </header>
+
+    <div id="grid" class="product-grid"></div>
+
+    <footer class="footer">
+      <span id="footerNote"></span>
+    </footer>
+  </main>
+
+  <!-- 상세 모달 -->
+  <div id="modal" class="modal" style="display:none" aria-hidden="true">
+    <div class="modal-backdrop" onclick="closeModal()"></div>
+    <article class="modal-content" id="modalContent" role="dialog" aria-modal="true"></article>
+  </div>
+
+  <!-- [요청] 추천 카탈로그 페이지 — config.js에 SUPABASE_URL / SUPABASE_ANON_KEY 정의 -->
+  <script src="config.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="catalog.js"></script>
+</body>
+</html>

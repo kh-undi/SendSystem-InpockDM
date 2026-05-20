@@ -96,7 +96,7 @@ UI에서 "발송 시작"을 누르면 [server.js](server.js)가 `node src/index.
 
 ### Supabase (기본)
 
-[scripts/schema.sql](scripts/schema.sql)이 전체 DDL. 10개 테이블:
+[scripts/schema.sql](scripts/schema.sql)이 전체 DDL. 11개 테이블:
 - `accounts` + `weekly_tracking` (발송 계정 / 주간 카운터)
 - `email_accounts` (Gmail 계정·서명)
 - `products` + `product_photos` (제품·사진 URL)
@@ -104,8 +104,21 @@ UI에서 "발송 시작"을 누르면 [server.js](server.js)가 `node src/index.
 - `sent_log` (append-only 감사 로그)
 - `reply_runs` + `replies` (답장 확인)
 - `leads` (답장 온 인플루언서 추적 — replied_at/proposal_sent_at/remind_at/final_status)
+- `catalogs` (인플루언서 맞춤 추천 카탈로그 — code/product_ids/view_count)
 - Storage 버킷: `product-photos`, `signatures` (모두 public)
 - RPC: `increment_weekly_count(account_id, week_key)` — 원자적 카운터 증가
+- RPC: `get_catalog_by_code(p_code)` — 공개 카탈로그 1건 조회 (SECURITY DEFINER로 RLS 우회, view_count 자동 증가). anon 키만 EXECUTE 가능.
+- RLS: `catalogs`/`products`/`product_photos` 활성화 (anon 직접 SELECT 차단, service_role은 우회 → 관리 UI 무영향).
+
+### 공개 추천 카탈로그 — [public/recommend/](public/recommend/) (Vercel 분리 배포)
+
+관리 UI의 "추천" 탭에서 인플루언서별 카탈로그 생성 → `/recommend/?c=<code>` 공개 URL 발급.
+- **분리 배포 이유**: 관리자 PC가 꺼져 있어도 인플루언서가 링크를 열 수 있어야 함. Vercel에 별도 정적 사이트로 띄움.
+- 파일 구성: `index.html` / `style.css` / `catalog.js` / `config.js`(anon 키 하드코딩) / `vercel.json`(`/c/:code` rewrite).
+- 데이터 흐름: 페이지가 supabase-js CDN으로 anon 키를 사용해 `get_catalog_by_code` RPC 호출 → 제품 + 사진 + view_count 자동 증가.
+- Vercel 배포: GitHub 연동 → Add New Project → Root Directory = `public/recommend` → Framework `Other`. 기본 도메인 `xxx.vercel.app` 사용.
+- 관리 UI 설정 → "추천 카탈로그 공개 URL"에 Vercel 도메인 입력. 미입력 시 `${currentOrigin}/recommend/` (로컬 테스트용)로 폴백.
+- 보안: `catalogs`/`products`/`product_photos` RLS 활성. anon은 직접 SELECT 불가, RPC만 통과. service_role(서버측)은 RLS 우회.
 
 ### JSON 파일 (롤백용으로 유지)
 
@@ -116,6 +129,7 @@ UI에서 "발송 시작"을 누르면 [server.js](server.js)가 `node src/index.
 - `influencers.json` / `failed.json`: `{nickname, profileUrl, productName, [error]}`
 - `replies.json`: `{checkedAt, partial, results[]}`
 - `leads.json`: `{leads: [{id, nickname, profileUrl, interestedProductName, suitableProductNote, repliedAt, proposalSentAt, remindAt, finalStatus, notes, ...}]}`
+- `catalogs.json`: `{catalogs: [{id, code, title, influencerNickname, leadId, productIds[], viewCount, viewedAt, createdAt}]}` (롤백 모드 전용 — 공개 페이지는 Supabase RPC 의존이라 JSON 모드에선 동작 안 함)
 
 ### 설정 파일 (양쪽 모드 공통)
 

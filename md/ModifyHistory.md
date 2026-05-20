@@ -6,11 +6,93 @@
 
 [ 요청사항 ]
 
+## 제품 추천 시스템 — 관심 제품 기반 연관 추천
+인플루언서가 A 제품에 관심을 보이면 함께 제안할 만한 연관 제품을 추천. 현재 제품 ~50개 규모. 분류 방식·구현 방향 미정 상태이며, 후속 요청에서 구체화 예정.
+
+- 사전 검토(상의용, 구현 X):
+  - **옵션 1** 카테고리/태그 기반 가중치 매칭 — 가장 단순, `products`에 `tags TEXT[]` 컬럼 추가 검토.
+  - **옵션 2** 텍스트 임베딩 코사인 유사도 — `pgvector` 컬럼, `usp + offerMessage + brand + category` 합쳐 임베딩.
+  - **옵션 3** Claude API에 50개 메타데이터 던지고 추천 받기 — prompt caching 활용, 추천 이유까지 동시 수령해 `leads.notes`에 자동 기록 가능.
+  - **옵션 4** 하이브리드 — 옵션1로 후보 10개 추리고 옵션3이 순위 매기기.
+- 갈피 잡히면 위 옵션 중 하나(또는 별안)로 정식 요청 예정. 그 전까진 코드 수정 없음.
 
 
 
 
 [ 작업완료 ]
+## URL 복사 후 "복사완료!" 토스트 (26.05.20)
+[public/index.html:199](public/index.html#L199) `.toast` CSS 신설(하단 중앙 고정, fade+slide 0.2s 트랜지션). [public/index.html:2400](public/index.html#L2400) `showToast(message)` 헬퍼 — 동일 노드 재사용, 1.6s 후 자동 hide, 연속 호출 시 타이머 리셋. `copyText()`의 success 콜백을 silent → `showToast('복사완료!')`로 교체. 카탈로그 목록 [복사], 모달 [📋 URL 복사], `copyResultUrl()` 모두 자동 적용.
+
+## 기존 카탈로그 수정 — 제품 목록 추가/순서조정 (26.05.20)
+- Repo: [src/repo/catalogsRepo.js](src/repo/catalogsRepo.js)에 `updateOneJson`/`updateOneSupabase`/`updateOne` 추가. `code`/`created_at`/`view_count`/`viewed_at` 보존, `title`/`influencer_nickname`/`lead_id`/`product_ids`만 갱신. validation은 insertOne과 동일(`NICKNAME_REQUIRED`, `PRODUCTS_REQUIRED`), Supabase NOT_FOUND(`PGRST116`)는 404 매핑.
+- Server: [server.js](server.js) `PUT /api/catalogs/:id` 추가. 응답 `{ ok, catalog }`.
+- UI: [public/index.html](public/index.html) 카탈로그 테이블 행에 `[수정]` 버튼 추가([복제]/[삭제] 사이). `openCatalogModal(sourceId, mode)`로 시그니처 확장 — `mode='edit'`이면 `editingCatalogId`에 id 저장, 제목·닉네임·leadId·`selectedProductIds` prefill, 모달 헤더("카탈로그 수정")·푸터 버튼("수정") 라벨 토글. `submitCatalog()`가 `editingCatalogId`에 따라 PUT/POST 분기. `closeCatalogModal()`에서 `editingCatalogId = null` 리셋. URL은 유지되어 인플루언서에게 재전달 불요.
+
+## 카탈로그 생성·수정 결과 박스 가독성 개선 — 모달 내부 오버레이 (26.05.20)
+- CSS: [public/index.html:191](public/index.html#L191) 기존 `.catalog-result-box` 자리에 `.catalog-result-overlay` + `.catalog-result-card` + 부속 클래스 신설. 오버레이는 `position:absolute; inset:0; background:rgba(0,0,0,0.6); z-index:2`로 모달 내부 풀커버, 가운데 흰 카드(✓ 아이콘 + 타이틀 + URL + 복사/닫기 버튼) 배치. `fadeIn` 0.18s 애니메이션.
+- HTML: [public/index.html:2705](public/index.html#L2705) `#catalogModal` 컨테이너 `position:relative; overflow:hidden`로, 내부 폼은 `overflow-y:auto` 스크롤 div로 분리. `#catalogResultBox`는 컨테이너 직계 자식 오버레이로 이동. 헤더에 `#catalogModalTitle`, 제출 버튼에 `#catalogSubmitBtn`, 결과 타이틀에 `#catalogResultTitle` ID 부여 — 신규/수정 모드별 텍스트 토글에 사용.
+- 결과 박스가 뜨면 폼·제품 패널은 그대로 두되 어두운 오버레이에 가려져 결과 카드로 시각 포커스 이동.
+
+## 인플루언서 붙여넣기 — 두 번째 컬럼 콤마 분리 다중 행 (26.05.20)
+[public/index.html:1427-1450](public/index.html#L1427) `pasteArea` paste 핸들러: 탭 분리된 라인에서 두 번째 컬럼(`profileUrl`)이 `,`로 나열되어 있으면 trim 후 각 값을 같은 `nickname`/`productName`으로 다중 행 push. 예) `nick\temail@x.com, link.inpock.co.kr/xxx\tproduct` → 이메일 1행 + URL 1행. URL 내부 `/`는 건드리지 않음. 콤마 분리 라인(탭 없음)은 기존 동작 그대로.
+
+## 추천 탭 검색 input 높이 통일 (26.05.20)
+[public/index.html:47](public/index.html#L47) 공통 입력 필드 CSS 셀렉터에 `input[type="search"]` 추가. `#catalogsSearch`(닉네임/제목 검색), `#catalogSearch`(카탈로그 모달 좌측 제품 검색) 두 input이 브라우저 기본 스타일로 렌더되던 문제 해결 — 다른 input과 동일한 padding(10px 12px)/border/높이로 정렬.
+
+## 추천 카탈로그 페이지 — 인플루언서별 큐레이션 공유 링크 (26.05.18)
+관리자가 인플루언서별로 제품을 큐레이션해서 공개 URL 발급 → 인플루언서가 갤러리+모달 형식 카탈로그 열람. 시스템 PC와 무관하게 항상 떠있도록 Vercel 분리 배포 구조. 한 인플루언서에 N개 카탈로그 생성 가능(차수별/시즌별).
+
+- **DB 스키마** [scripts/schema.sql](scripts/schema.sql) — 11번 섹션 추가:
+  - `catalogs` 테이블: `id`, `code text unique`, `title`, `influencer_nickname not null`, `lead_id int -> leads(id) on delete set null`, `product_ids jsonb not null default '[]'` (드래그로 정한 순서 그대로 저장 → 렌더 시 그 순서 보존), `view_count int default 0`, `viewed_at`, `created_at`.
+  - 인덱스: `idx_catalogs_code(code)`, `idx_catalogs_nickname(influencer_nickname)`.
+  - **`get_catalog_by_code(p_code text) returns json` RPC** (SECURITY DEFINER, search_path public): code 일치 시 `view_count+=1`, `viewed_at=now()`, `product_ids` 순서대로 `products` + `product_photos` join해서 JSON 1건 반환. 미존재 시 null. `grant execute ... to anon` 으로 anon 키만 호출 가능.
+  - **RLS 활성화**: `catalogs`/`products`/`product_photos` 모두 `enable row level security`. 정책 없음 = anon 직접 SELECT 차단. service_role(서버)는 RLS 우회하므로 기존 관리 UI/매크로 무영향.
+  - ⚠️ 운영 Supabase는 SQL Editor에서 11번 섹션 + 3개 ALTER ENABLE RLS 블록 1회 실행 필요.
+
+- **Repo 레이어** [src/repo/catalogsRepo.js](src/repo/catalogsRepo.js) 신규 (leadsRepo 패턴):
+  - `list()` / `insertOne(payload)` / `removeOne(id)`. `update`는 v1 범위 외 — 수정 필요 시 삭제 후 재생성(URL 재발급) 워크플로우.
+  - `generateCode()`: `crypto.randomBytes(5).toString('base64')` → URL-safe(`-`, `_`)로 치환 후 6자.
+  - `insertOneSupabase()`: unique 충돌 시 5회 재시도(`error.code === '23505'`).
+  - dual-mode: `config.USE_SUPABASE` 분기. JSON 폴백 `catalogs.json`. ⚠️ JSON 모드에선 공개 페이지가 동작 안 함(RPC가 Supabase 의존).
+
+- **Server API** [server.js](server.js):
+  - `GET /api/catalogs` / `POST /api/catalogs` / `DELETE /api/catalogs/:id`. 인증 미들웨어 뒤(authRequired).
+  - `POST`는 `NICKNAME_REQUIRED` → 400, `PRODUCTS_REQUIRED` → 400. body: `{title, influencerNickname, leadId?, productIds[]}`.
+
+- **관리자 UI** [public/index.html](public/index.html):
+  - 탭바 `리드 관리` 다음에 `📦 추천` 탭 추가. 탭 진입 시 `loadCatalogs()` 호출 + 60초 폴링.
+  - 신규 `panel-catalogs`: 닉네임/제목 검색 input + 정렬 select(`최근순` / `닉네임 그룹화순`). 닉네임순일 때 같은 닉네임 row는 `↳` prefix로 표시.
+  - 테이블 7컬럼: 닉네임 | 제목 | 제품수 | 조회수 | URL(copy버튼) | 생성일 | [복제]/[삭제].
+  - **신규 모달 `#catalogModal`** — 2패널 좌우 구조:
+    - 상단: 제목 input(placeholder `"말랑맘님 - 1차 공구 제안"`, 비우면 `{닉네임}님 공동구매 제안` 자동), 리드 select(선택 시 `lead_id` + 닉네임 자동 채움), 닉네임 input(이미 N개 존재 시 안내 박스 자동 노출).
+    - 좌패널: 검색 input + 전체 제품 list. 클릭으로 우패널에 추가(중복 불가).
+    - 우패널: 선택된 제품 list. **Sortable.js**(CDN `sortablejs@1.15.2`)로 드래그 정렬. `data-pid` 기반 DOM 순서 → `selectedProductIds` 동기화.
+    - 생성 성공 시 모달 안에 URL 표시 + `[📋 복사]` 버튼. 닫으면 목록 갱신.
+  - **[복제] 동작**: 기존 카탈로그 클릭 → 같은 닉네임/제품으로 prefill, 제목에 ` (복사)` 자동 추가. 차수별 변형용.
+  - **공개 URL 설정** — 설정 탭에 "추천 카탈로그 공개 URL" 카드 추가. Vercel 배포 도메인 저장. `loadSettings()`에서 `window.CATALOG_PUBLIC_BASE_URL` 갱신. 미입력 시 `${location.origin}/recommend/` 폴백.
+
+- **공개 카탈로그** — `public/recommend/` 신규 폴더 (Vercel 분리 배포):
+  - [public/recommend/index.html](public/recommend/index.html): 갤러리 hero + 그리드 + 모달 컨테이너. `<meta name="robots" content="noindex,nofollow">`.
+  - [public/recommend/style.css](public/recommend/style.css): 모바일 우선(2-col → 480px 미만은 1-col), 스크린샷 톤(흰 카드 + 호버 lift).
+  - [public/recommend/catalog.js](public/recommend/catalog.js): URL `?c=<code>` 또는 `?code=<code>` 파싱 → supabase-js CDN(`@supabase/supabase-js@2`)으로 `rpc('get_catalog_by_code')` 호출 → 카드 렌더. 카드 클릭 시 모달(큰 사진 + 인스타 공구 예시 링크 + 제품 상세 페이지 링크 + 콘텐츠 포인트(USP) + 제안 내용(offerMessage) + 추천 연령). ESC + 닫기 버튼.
+  - [public/recommend/config.js](public/recommend/config.js): `window.SUPABASE_URL` / `window.SUPABASE_ANON_KEY` 플레이스홀더. 사용자가 anon key 1회 입력.
+  - [public/recommend/vercel.json](public/recommend/vercel.json): `/c/:code` → `/index.html?c=:code` rewrite + `X-Robots-Tag: noindex,nofollow` 헤더.
+
+- **로컬 테스트**: `server.js`의 `app.use(express.static(path.join(__dirname, 'public')))`이 자동으로 `/recommend/`를 서빙. `config.js`에 anon 키 채우면 `http://localhost:3000/recommend/?c=<code>`로 바로 테스트 가능.
+
+- **Vercel 배포 절차**:
+  1. GitHub에 푸시.
+  2. Vercel → New Project → 본 리포 선택 → Framework `Other` → Root Directory `public/recommend` → Deploy.
+  3. 첫 Deploy 후 `https://<프로젝트명>.vercel.app/?c=<code>` URL 확보.
+  4. 관리 UI 설정 → "추천 카탈로그 공개 URL"에 `https://<프로젝트명>.vercel.app/` 입력 → 저장. 이후 발급되는 모든 URL이 이 도메인을 사용.
+  5. ⚠️ **anon key 확보**: Supabase Dashboard → Project Settings → API → "anon public" 키 복사 → `public/recommend/config.js`에 채워서 푸시.
+
+- **알려진 한계 / 후속 작업**:
+  - **6자 code의 추측 위험**: ≈37억 조합이라 brute-force 비용 높지만, anon RPC가 rate limit 없으면 이론상 가능. 우려 시 후속에서 8자 이상으로 확장 또는 PostgREST rate limit 적용.
+  - **카탈로그 수정 미지원**: v1은 생성/삭제만. 제품/순서 바꾸려면 삭제 후 재생성(URL 재발급). 사용 패턴 보고 후속에서 PUT 추가 검토.
+  - **JSON 롤백 모드에선 공개 페이지 동작 안 함**: `get_catalog_by_code` RPC가 Supabase 의존. 롤백 시 관리 UI에서는 CRUD되지만 공유 URL은 죽음.
+  - **가격 정보 미노출**: products 테이블에 price 컬럼이 없어 카드/모달에 가격 표시 안 함. 필요 시 후속에서 컬럼 추가.
+
 ## 모달 바깥 클릭으로 닫히지 않게 — ESC / X 버튼만 닫기 (공통 UI) (26.05.14)
 실수로 backdrop 클릭해 입력 내용이 날아가는 일이 잦아, 4개 모달 모두 ESC 키와 우상단 ✕ 버튼으로만 닫히도록 통일.
 

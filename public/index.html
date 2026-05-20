@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" type="image/x-icon" href="/favicon.ico">
   <title>인포크링크 제안서 매크로</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -20,7 +21,7 @@
     .tab.active { color: #6366f1; border-bottom-color: #6366f1; }
 
     /* 컨텐츠 */
-    .content { max-width: 1200px; margin: 0 auto; padding: 24px; }
+    .content { max-width: 1600px; margin: 0 auto; padding: 24px; }
     .panel { display: none; }
     .panel.active { display: block; }
 
@@ -43,7 +44,7 @@
     .btn-group { display: flex; gap: 8px; flex-wrap: wrap; }
 
     /* 입력 필드 */
-    input[type="text"], input[type="password"], textarea, select {
+    input[type="text"], input[type="password"], input[type="search"], textarea, select {
       width: 100%; padding: 10px 12px; border: 1.5px solid #d1d5db; border-radius: 8px;
       font-size: 14px; transition: border-color 0.2s; font-family: inherit;
     }
@@ -162,7 +163,49 @@
     .leads-filter-bar { display:flex; gap:12px; align-items:center; margin-bottom:12px; flex-wrap:wrap; }
     .leads-filter-bar select { width:auto; min-width:140px; }
     .leads-due-summary { background:#fef3c7; border:1px solid #fde68a; border-radius:8px; padding:10px 14px; margin-bottom:12px; font-size:13px; color:#92400e; }
+
+    /* [요청] 추천 카탈로그 페이지 — 인플루언서별 큐레이션 공유 링크 */
+    .catalogs-table { width:100%; border-collapse:collapse; }
+    .catalogs-table th { background:#f9fafb; padding:10px 8px; text-align:left; font-size:12px; font-weight:700; color:#6b7280; border-bottom:2px solid #e5e7eb; white-space:nowrap; }
+    .catalogs-table td { padding:10px 8px; border-bottom:1px solid #f3f4f6; font-size:13px; vertical-align:middle; }
+    .catalogs-table tr:hover { background:#f9fafb; }
+    .catalogs-table tr.group-cont td:first-child { color:#9ca3af; font-style:italic; }
+    .catalogs-table .url-cell { font-family:'SF Mono','Consolas',monospace; font-size:11px; color:#6366f1; }
+    .catalogs-table .copy-btn { font-size:11px; padding:2px 8px; margin-left:4px; }
+    .catalogs-empty { text-align:center; padding:40px; color:#9ca3af; font-size:14px; }
+
+    /* 카탈로그 생성 모달 — 2패널 좌(전체)-우(선택됨) */
+    .catalog-panels { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:8px; min-height:320px; max-height:50vh; }
+    .catalog-panel { border:1px solid #e5e7eb; border-radius:8px; padding:10px; background:#fafafa; display:flex; flex-direction:column; }
+    .catalog-panel-title { font-size:12px; font-weight:700; color:#6b7280; margin-bottom:8px; padding-bottom:6px; border-bottom:1px solid #e5e7eb; }
+    .catalog-product-list { flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:4px; }
+    .catalog-product-item { display:flex; align-items:center; gap:8px; padding:6px 8px; background:white; border:1px solid #e5e7eb; border-radius:6px; font-size:13px; cursor:pointer; user-select:none; }
+    .catalog-product-item:hover { background:#f3f4f6; }
+    .catalog-product-item.selected { opacity:0.45; }
+    .catalog-product-item .name { flex:1; }
+    .catalog-product-item .meta { font-size:11px; color:#9ca3af; }
+    .catalog-product-item.in-selected { cursor:grab; }
+    .catalog-product-item.in-selected:active { cursor:grabbing; }
+    .catalog-product-item .drag-handle { color:#9ca3af; font-size:14px; padding:0 2px; }
+    .catalog-product-item .remove-btn { background:transparent; border:none; color:#ef4444; cursor:pointer; padding:2px 6px; font-size:14px; }
+    /* [요청] 카탈로그 생성·수정 결과 — 모달 내부 오버레이로 시각적 강조 */
+    .catalog-result-overlay { position:absolute; inset:0; background:rgba(0,0,0,0.6); border-radius:12px; display:flex; align-items:center; justify-content:center; z-index:2; animation:fadeIn 0.18s ease; }
+    .catalog-result-card { background:white; border-radius:12px; padding:28px 32px; max-width:480px; width:90%; display:flex; flex-direction:column; align-items:center; gap:12px; box-shadow:0 20px 60px rgba(0,0,0,0.45); text-align:center; }
+    .catalog-result-icon { width:56px; height:56px; border-radius:50%; background:#d1fae5; color:#059669; display:flex; align-items:center; justify-content:center; font-size:32px; font-weight:700; }
+    .catalog-result-title { font-size:18px; font-weight:700; color:#111827; }
+    .catalog-result-hint { font-size:13px; color:#6b7280; }
+    .catalog-result-url { font-family:'SF Mono','Consolas',monospace; font-size:13px; color:#4338ca; word-break:break-all; background:#f3f4f6; padding:10px 12px; border-radius:8px; width:100%; box-sizing:border-box; }
+    .catalog-result-actions { display:flex; gap:8px; margin-top:4px; }
+    @keyframes fadeIn { from { opacity:0 } to { opacity:1 } }
+    /* [요청] 복사완료 토스트 */
+    .toast { position:fixed; bottom:32px; left:50%; transform:translateX(-50%); background:rgba(17,24,39,0.92); color:#fff; padding:10px 18px; border-radius:8px; font-size:13px; font-weight:600; box-shadow:0 4px 14px rgba(0,0,0,0.25); z-index:2000; opacity:0; pointer-events:none; transition:opacity 0.2s, transform 0.2s; }
+    .toast.show { opacity:1; transform:translateX(-50%) translateY(-4px); }
+    .catalog-dup-warning { font-size:12px; color:#b45309; background:#fef3c7; border-radius:6px; padding:6px 10px; }
+    .sortable-ghost { opacity:0.4; }
+    .sortable-chosen { background:#e0e7ff !important; }
   </style>
+  <!-- [요청] 추천 카탈로그 — 드래그 정렬용 -->
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 </head>
 <body>
   <div class="header">
@@ -184,6 +227,8 @@
     <div class="tab" data-panel="replies">답장 확인</div>
     <!-- [요청] 리드 관리 탭 신설 — 답장 확인 우측 -->
     <div class="tab" data-panel="leads">리드 관리 <span class="leads-due-badge" id="leadsDueBadge" style="display:none">0</span></div>
+    <!-- [요청] 추천 카탈로그 페이지 — 인플루언서별 큐레이션 공유 링크 -->
+    <div class="tab" data-panel="catalogs">📦 추천</div>
     <!-- [요청] 인스타그램 URL → 평균 릴스 통계 조회 -->
     <div class="tab" data-panel="instagram">📊 인스타분석(미완성)</div>
   </div>
@@ -200,6 +245,21 @@
           <div style="display:flex;gap:8px">
             <input type="text" id="settingsMailBcc" placeholder="예: name@company.com">
             <button class="btn btn-primary btn-sm" onclick="saveSettings()" style="white-space:nowrap">저장</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- [요청] 추천 카탈로그 페이지 — 공개 URL 기본 도메인 -->
+      <div class="card">
+        <div class="card-title">추천 카탈로그 공개 URL</div>
+        <div class="form-group" style="max-width:560px">
+          <label>Vercel 배포 도메인 — 공유 링크 생성 시 이 도메인이 쓰입니다 (비우면 현재 호스트의 <code>/recommend/</code>)</label>
+          <div style="display:flex;gap:8px">
+            <input type="text" id="settingsCatalogBaseUrl" placeholder="예: https://my-catalog.vercel.app/">
+            <button class="btn btn-primary btn-sm" onclick="saveCatalogBaseUrl()" style="white-space:nowrap">저장</button>
+          </div>
+          <div style="font-size:12px;color:#94a3b8;margin-top:6px">
+            * 끝에 슬래시 자동 추가됨. 미설정 시 로컬 테스트용 URL이 발급됨.
           </div>
         </div>
       </div>
@@ -513,10 +573,48 @@
                 <th>리마인드 필요일</th>
                 <th>어울릴만한 제품</th>
                 <th>최종 결과</th>
-                <th style="width:120px">액션</th>
+                <th style="width:160px">액션</th>
               </tr>
             </thead>
             <tbody id="leadsBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ [요청] 추천 카탈로그 페이지 — 인플루언서별 큐레이션 공유 링크 ═══ -->
+    <div class="panel" id="panel-catalogs">
+      <div class="card">
+        <div class="actions-bar">
+          <div class="card-title">추천 카탈로그 <span class="count" id="catalogsCount">0</span></div>
+          <div class="btn-group">
+            <button class="btn btn-primary btn-sm" onclick="openCatalogModal()">+ 신규 카탈로그</button>
+          </div>
+        </div>
+        <p style="font-size:13px;color:#6b7280;margin-bottom:12px">인플루언서별로 제품을 큐레이션해서 공개 URL을 발급합니다. 한 인플루언서에게 여러 개(차수별/시즌별) 만들 수 있습니다.</p>
+        <div class="leads-filter-bar">
+          <input type="search" id="catalogsSearch" placeholder="🔍 닉네임/제목 검색" style="width:auto;min-width:200px" oninput="renderCatalogs()">
+          <label style="margin-bottom:0">정렬</label>
+          <select id="catalogsSort" onchange="renderCatalogs()" style="width:auto;min-width:160px">
+            <option value="recent">최근 생성순</option>
+            <option value="nickname">닉네임순 (그룹화)</option>
+          </select>
+          <span style="font-size:12px;color:#9ca3af" id="catalogsFilterCount"></span>
+        </div>
+        <div style="overflow-x:auto">
+          <table class="catalogs-table" id="catalogsTable">
+            <thead>
+              <tr>
+                <th>닉네임</th>
+                <th>제목</th>
+                <th style="width:80px;text-align:center">제품수</th>
+                <th style="width:80px;text-align:center">조회수</th>
+                <th>URL</th>
+                <th style="width:90px">생성일</th>
+                <th style="width:200px">액션</th>
+              </tr>
+            </thead>
+            <tbody id="catalogsBody"></tbody>
           </table>
         </div>
       </div>
@@ -550,6 +648,10 @@
         // [요청] 리드 관리 탭 진입 시 최신 데이터 재로드
         if (tab.dataset.panel === 'leads') {
           loadLeads();
+        }
+        // [요청] 추천 카탈로그 탭 진입 시 재로드
+        if (tab.dataset.panel === 'catalogs') {
+          loadCatalogs();
         }
       });
     });
@@ -1336,13 +1438,17 @@
       for (const line of lines) {
         // 탭 또는 콤마로 분리
         const parts = line.includes('\t') ? line.split('\t') : line.split(',');
+        // [요청] 두 번째 컬럼이 콤마로 나열된 경우 같은 닉네임/제품으로 다중 행 생성 (탭 분리 라인에서만 적용)
         if (parts.length >= 3) {
-          influencers.push({
-            nickname: parts[0].trim(),
-            profileUrl: parts[1].trim(),
-            productName: parts[2].trim(),
-          });
-          added++;
+          const nickname = parts[0].trim();
+          const productName = parts[2].trim();
+          const urls = line.includes('\t')
+            ? parts[1].split(',').map(s => s.trim()).filter(Boolean)
+            : [parts[1].trim()];
+          for (const url of urls) {
+            influencers.push({ nickname, profileUrl: url, productName });
+            added++;
+          }
         } else if (parts.length === 2) {
           // 닉네임 + URL만 있으면 제품명은 비워둠
           influencers.push({
@@ -1884,6 +1990,16 @@
       const res = await fetch('/api/settings');
       const data = await res.json();
       document.getElementById('settingsMailBcc').value = data.mailBcc || '';
+      // [요청] 추천 카탈로그 공개 URL — 입력 + 전역 변수 동기화 (공유 링크 생성에 사용)
+      const cb = document.getElementById('settingsCatalogBaseUrl');
+      if (cb) cb.value = data.catalogPublicBaseUrl || '';
+      if (data.catalogPublicBaseUrl) {
+        window.CATALOG_PUBLIC_BASE_URL = data.catalogPublicBaseUrl.endsWith('/')
+          ? data.catalogPublicBaseUrl
+          : data.catalogPublicBaseUrl + '/';
+      } else {
+        window.CATALOG_PUBLIC_BASE_URL = null;
+      }
       // [요청] 외부 배포 — headless 토글 반영
       const hd = document.getElementById('settingsHeadless');
       if (hd) hd.checked = !!data.headless;
@@ -1924,6 +2040,24 @@
       const mailBcc = document.getElementById('settingsMailBcc').value.trim();
       await fetch('/api/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mailBcc }) });
       alert('설정이 저장되었습니다.');
+    }
+
+    // [요청] 추천 카탈로그 공개 URL 저장
+    async function saveCatalogBaseUrl() {
+      let url = document.getElementById('settingsCatalogBaseUrl').value.trim();
+      if (url && !/^https?:\/\//.test(url)) {
+        alert('URL은 http:// 또는 https:// 로 시작해야 합니다.');
+        return;
+      }
+      if (url && !url.endsWith('/')) url += '/';
+      await fetch('/api/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ catalogPublicBaseUrl: url }),
+      });
+      window.CATALOG_PUBLIC_BASE_URL = url || null;
+      renderCatalogs(); // 목록에 표시된 URL도 갱신
+      alert('추천 카탈로그 공개 URL이 저장되었습니다.');
     }
 
     // [요청] 외부 배포 — 관리자 비밀번호 변경
@@ -2191,12 +2325,309 @@
       await loadLeads();
     }
 
+    // ═══════════════════════════════════════
+    //  [요청] 추천 카탈로그 페이지 — 인플루언서별 큐레이션 공유 링크
+    // ═══════════════════════════════════════
+    let catalogs = [];
+    let selectedProductIds = []; // 모달 내부 선택 상태 (순서 보존)
+    let prefillNickname = ''; // 닉네임 prefill 상태
+    let sortableInstance = null;
+
+    async function loadCatalogs() {
+      try {
+        const res = await fetch('/api/catalogs');
+        if (!res.ok) return;
+        catalogs = await res.json();
+        renderCatalogs();
+      } catch {}
+    }
+
+    function renderCatalogs() {
+      const q = (document.getElementById('catalogsSearch')?.value || '').trim().toLowerCase();
+      const sort = document.getElementById('catalogsSort')?.value || 'recent';
+
+      let list = catalogs.slice();
+      if (q) {
+        list = list.filter(c =>
+          (c.influencerNickname || '').toLowerCase().includes(q) ||
+          (c.title || '').toLowerCase().includes(q)
+        );
+      }
+      if (sort === 'nickname') {
+        list.sort((a, b) => {
+          const na = (a.influencerNickname || '').toLowerCase();
+          const nb = (b.influencerNickname || '').toLowerCase();
+          if (na !== nb) return na.localeCompare(nb, 'ko');
+          return (b.createdAt || '').localeCompare(a.createdAt || '');
+        });
+      } else {
+        list.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+      }
+
+      document.getElementById('catalogsCount').textContent = catalogs.length;
+      document.getElementById('catalogsFilterCount').textContent =
+        (q ? `(${list.length}/${catalogs.length})` : '');
+
+      const tbody = document.getElementById('catalogsBody');
+      if (!list.length) {
+        tbody.innerHTML = `<tr><td colspan="7" class="catalogs-empty">${catalogs.length === 0 ? '생성된 카탈로그가 없습니다. "+ 신규 카탈로그"로 시작하세요.' : '검색 결과 없음'}</td></tr>`;
+        return;
+      }
+
+      let prevNickname = null;
+      tbody.innerHTML = list.map(c => {
+        const baseUrl = (window.CATALOG_PUBLIC_BASE_URL || `${location.origin}/recommend/`);
+        const url = `${baseUrl}?c=${encodeURIComponent(c.code)}`;
+        const isGroup = sort === 'nickname' && c.influencerNickname === prevNickname;
+        const nickCell = isGroup
+          ? `<td><span style="color:#9ca3af">↳</span></td>`
+          : `<td><b>${esc(c.influencerNickname)}</b></td>`;
+        prevNickname = c.influencerNickname;
+        const created = (c.createdAt || '').slice(0, 10);
+        return `<tr class="${isGroup ? 'group-cont' : ''}">
+          ${nickCell}
+          <td>${esc(c.title || '-')}</td>
+          <td style="text-align:center">${(c.productIds || []).length}</td>
+          <td style="text-align:center">${c.viewCount || 0}</td>
+          <td><span class="url-cell">${esc(url)}</span><button class="btn btn-outline copy-btn" onclick="copyText('${esc(url)}')">복사</button></td>
+          <td style="font-size:12px;color:#6b7280">${esc(created)}</td>
+          <td>
+            <button class="btn btn-outline btn-sm" onclick="openCatalogModal(${c.id}, 'edit')">수정</button>
+            <button class="btn btn-outline btn-sm" onclick="openCatalogModal(${c.id})">복제</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteCatalog(${c.id})">삭제</button>
+          </td>
+        </tr>`;
+      }).join('');
+    }
+
+    // [요청] 가벼운 토스트 — 동일 노드 재사용, 연속 호출 시 타이머 리셋
+    let _toastTimer = null;
+    function showToast(message) {
+      let el = document.getElementById('appToast');
+      if (!el) {
+        el = document.createElement('div');
+        el.id = 'appToast';
+        el.className = 'toast';
+        document.body.appendChild(el);
+      }
+      el.textContent = message;
+      requestAnimationFrame(() => el.classList.add('show'));
+      if (_toastTimer) clearTimeout(_toastTimer);
+      _toastTimer = setTimeout(() => el.classList.remove('show'), 1600);
+    }
+
+    function copyText(text) {
+      navigator.clipboard.writeText(text).then(
+        () => showToast('복사완료!'),
+        () => alert('복사 실패: ' + text)
+      );
+    }
+
+    // [요청] 모달 열기 — mode: 'clone'(기본, 신규/복제) | 'edit'(기존 카탈로그 수정, code/view_count 보존)
+    let editingCatalogId = null;
+    function openCatalogModal(sourceId, mode = 'clone') {
+      const source = sourceId ? catalogs.find(c => c.id === sourceId) : null;
+      editingCatalogId = (source && mode === 'edit') ? source.id : null;
+      selectedProductIds = source ? source.productIds.slice() : [];
+      prefillNickname = source ? source.influencerNickname : '';
+
+      // 리드 select 옵션 채우기
+      const leadSelect = document.getElementById('catalogLeadSelect');
+      leadSelect.innerHTML =
+        '<option value="">— 리드에서 선택 (선택사항) —</option>' +
+        (leads || []).map(l => `<option value="${l.id}" data-nickname="${esc(l.nickname)}">${esc(l.nickname)}</option>`).join('');
+      leadSelect.value = (editingCatalogId && source.leadId) ? String(source.leadId) : '';
+
+      document.getElementById('catalogTitle').value =
+        editingCatalogId ? (source.title || '') :
+        source ? `${source.title || ''} (복사)` : '';
+      document.getElementById('catalogNickname').value = prefillNickname;
+      document.getElementById('catalogSearch').value = '';
+      document.getElementById('catalogResultBox').style.display = 'none';
+
+      // 헤더·버튼 라벨 토글
+      document.getElementById('catalogModalTitle').textContent = editingCatalogId ? '카탈로그 수정' : '신규 카탈로그';
+      document.getElementById('catalogSubmitBtn').textContent = editingCatalogId ? '수정' : '생성';
+
+      renderCatalogProductPanels();
+      updateDupWarning();
+
+      document.getElementById('catalogModal').style.display = 'flex';
+      setTimeout(() => document.getElementById('catalogNickname').focus(), 0);
+    }
+
+    function closeCatalogModal() {
+      document.getElementById('catalogModal').style.display = 'none';
+      if (sortableInstance) { sortableInstance.destroy(); sortableInstance = null; }
+      selectedProductIds = [];
+      editingCatalogId = null;
+    }
+
+    function onCatalogLeadChange() {
+      const sel = document.getElementById('catalogLeadSelect');
+      const opt = sel.options[sel.selectedIndex];
+      const nickname = opt?.dataset?.nickname || '';
+      if (nickname) {
+        document.getElementById('catalogNickname').value = nickname;
+        updateDupWarning();
+      }
+    }
+
+    function updateDupWarning() {
+      const nick = document.getElementById('catalogNickname').value.trim();
+      const box = document.getElementById('catalogDupWarning');
+      if (!nick) { box.style.display = 'none'; return; }
+      const existing = catalogs.filter(c => c.influencerNickname === nick).length;
+      if (existing > 0) {
+        box.style.display = 'block';
+        box.textContent = `ℹ️ "${nick}" 닉네임으로 이미 ${existing}개의 카탈로그가 있습니다. (의도된 경우 그대로 진행)`;
+      } else {
+        box.style.display = 'none';
+      }
+    }
+
+    function renderCatalogProductPanels() {
+      const q = (document.getElementById('catalogSearch')?.value || '').trim().toLowerCase();
+      const allList = document.getElementById('catalogAllList');
+      const selectedList = document.getElementById('catalogSelectedList');
+
+      // 좌패널 — 전체 제품 (검색 적용)
+      const filtered = (products || []).filter(p => {
+        if (!q) return true;
+        return [p.name, p.brandName, p.productName, p.category].some(v =>
+          (v || '').toLowerCase().includes(q)
+        );
+      });
+      if (!filtered.length) {
+        allList.innerHTML = `<div style="text-align:center;color:#9ca3af;font-size:12px;padding:20px">${products.length === 0 ? '제품이 없습니다' : '검색 결과 없음'}</div>`;
+      } else {
+        allList.innerHTML = filtered.map(p => {
+          const isSelected = selectedProductIds.includes(p.id);
+          return `<div class="catalog-product-item ${isSelected ? 'selected' : ''}" onclick="toggleProductSelect(${p.id})">
+            <div style="flex:1">
+              <div class="name">${esc(p.name)}</div>
+              <div class="meta">${esc(p.brandName || '-')} · ${esc(p.category || '-')}</div>
+            </div>
+            <span style="font-size:13px;color:${isSelected ? '#10b981' : '#d1d5db'}">${isSelected ? '✓' : '+'}</span>
+          </div>`;
+        }).join('');
+      }
+
+      // 우패널 — 선택된 제품 (순서 보존 / 드래그 가능)
+      if (!selectedProductIds.length) {
+        selectedList.innerHTML = `<div style="text-align:center;color:#9ca3af;font-size:12px;padding:20px">왼쪽에서 제품을 선택하세요</div>`;
+      } else {
+        selectedList.innerHTML = selectedProductIds.map(pid => {
+          const p = products.find(x => x.id === pid);
+          if (!p) return '';
+          return `<div class="catalog-product-item in-selected" data-pid="${pid}">
+            <span class="drag-handle">⠿</span>
+            <div style="flex:1">
+              <div class="name">${esc(p.name)}</div>
+              <div class="meta">${esc(p.brandName || '-')}</div>
+            </div>
+            <button class="remove-btn" onclick="removeFromSelected(${pid})" title="제거">✕</button>
+          </div>`;
+        }).join('');
+      }
+
+      // Sortable 재바인딩
+      if (sortableInstance) { sortableInstance.destroy(); sortableInstance = null; }
+      if (selectedProductIds.length && typeof Sortable !== 'undefined') {
+        sortableInstance = Sortable.create(selectedList, {
+          handle: '.drag-handle',
+          animation: 150,
+          ghostClass: 'sortable-ghost',
+          chosenClass: 'sortable-chosen',
+          onEnd: () => {
+            // DOM 순서 → selectedProductIds 동기화
+            selectedProductIds = Array.from(selectedList.querySelectorAll('[data-pid]'))
+              .map(el => Number(el.dataset.pid));
+          },
+        });
+      }
+    }
+
+    function toggleProductSelect(pid) {
+      const idx = selectedProductIds.indexOf(pid);
+      if (idx >= 0) selectedProductIds.splice(idx, 1);
+      else selectedProductIds.push(pid);
+      renderCatalogProductPanels();
+    }
+
+    function removeFromSelected(pid) {
+      const idx = selectedProductIds.indexOf(pid);
+      if (idx >= 0) {
+        selectedProductIds.splice(idx, 1);
+        renderCatalogProductPanels();
+      }
+    }
+
+    // [요청] 편집 모드(editingCatalogId 있음) → PUT, 신규/복제 → POST. URL(code)은 편집 시 유지.
+    async function submitCatalog() {
+      const nickname = document.getElementById('catalogNickname').value.trim();
+      if (!nickname) { alert('닉네임은 필수입니다.'); return; }
+      if (!selectedProductIds.length) { alert('제품을 1개 이상 선택해야 합니다.'); return; }
+      const leadId = Number(document.getElementById('catalogLeadSelect').value) || null;
+      const title = document.getElementById('catalogTitle').value.trim() || `${nickname}님 공동구매 제안`;
+
+      const isEdit = editingCatalogId != null;
+      const url = isEdit ? `/api/catalogs/${editingCatalogId}` : '/api/catalogs';
+      const method = isEdit ? 'PUT' : 'POST';
+
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title,
+          influencerNickname: nickname,
+          leadId,
+          productIds: selectedProductIds,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(data.error || `${isEdit ? '수정' : '생성'} 실패: ${res.status}`);
+        return;
+      }
+      // 결과 표시 (편집 시 URL 동일, 타이틀만 "수정됨"으로)
+      const baseUrl = (window.CATALOG_PUBLIC_BASE_URL || `${location.origin}/recommend/`);
+      const publicUrl = `${baseUrl}?c=${encodeURIComponent(data.catalog.code)}`;
+      document.getElementById('catalogResultUrl').textContent = publicUrl;
+      document.getElementById('catalogResultTitle').textContent = isEdit ? '카탈로그 수정됨' : '카탈로그 생성됨';
+      document.getElementById('catalogResultBox').style.display = 'flex';
+      document.getElementById('catalogResultBox').dataset.url = publicUrl;
+      await loadCatalogs();
+    }
+
+    function copyResultUrl() {
+      const url = document.getElementById('catalogResultBox').dataset.url;
+      if (url) copyText(url);
+    }
+
+    async function deleteCatalog(id) {
+      const cat = catalogs.find(c => c.id === id);
+      if (!confirm(`"${cat?.title || cat?.influencerNickname || ''}" 카탈로그를 삭제할까요?`)) return;
+      const res = await fetch(`/api/catalogs/${id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        alert(data.error || `삭제 실패: ${res.status}`);
+        return;
+      }
+      await loadCatalogs();
+    }
+
+    // 초기 로드
+    loadCatalogs();
+    setInterval(loadCatalogs, 60000);
+
     // [요청] ESC로만 닫기 공통 핸들러 — 바깥 클릭 닫힘 제거된 .modal-backdrop 대상
     const MODAL_CLOSERS = {
       manualSendModal: closeManualSendModal,
       hookingModal: closeHookingModal,
       leadModal: closeLeadModal,
       quickProductModal: closeQuickProductModal,
+      catalogModal: closeCatalogModal,
     };
     document.addEventListener('keydown', (e) => {
       if (e.key !== 'Escape') return;
@@ -2308,6 +2739,69 @@
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px">
         <button class="btn btn-outline btn-sm" onclick="closeLeadModal()">취소</button>
         <button class="btn btn-primary btn-sm" onclick="saveLead()">저장</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- [요청] 추천 카탈로그 — 신규 / 복제 / 수정 모달 (2패널 좌-우) -->
+  <div id="catalogModal" class="modal-backdrop" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center">
+    <div style="background:white;border-radius:12px;max-width:880px;width:94%;max-height:92vh;display:flex;flex-direction:column;box-shadow:0 10px 40px rgba(0,0,0,0.2);position:relative;overflow:hidden">
+      <div style="padding:24px;overflow-y:auto;display:flex;flex-direction:column;gap:10px;flex:1;min-height:0">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <h3 id="catalogModalTitle" style="margin:0;font-size:18px">신규 카탈로그</h3>
+          <button class="btn btn-sm" style="background:transparent;color:#6b7280;padding:4px 8px" onclick="closeCatalogModal()">✕</button>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1.5fr 1fr;gap:12px">
+          <div class="form-group" style="margin-bottom:0">
+            <label>카탈로그 제목 <span style="font-size:11px;color:#9ca3af;font-weight:400">(비우면 "{닉네임}님 공동구매 제안" 자동 사용)</span></label>
+            <input id="catalogTitle" type="text" placeholder="예: 인플명 - 1차 공구 제안">
+          </div>
+          <div class="form-group" style="margin-bottom:0">
+            <label>리드에서 가져오기 <span style="font-size:11px;color:#9ca3af;font-weight:400">(선택)</span></label>
+            <select id="catalogLeadSelect" onchange="onCatalogLeadChange()"></select>
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-bottom:0">
+          <label>인플루언서 닉네임 <span style="color:#ef4444">*</span></label>
+          <input id="catalogNickname" type="text" placeholder="예: @nickname 또는 인플루언서명" oninput="updateDupWarning()">
+        </div>
+        <div id="catalogDupWarning" class="catalog-dup-warning" style="display:none"></div>
+
+        <div style="margin-top:6px">
+          <input type="search" id="catalogSearch" placeholder="🔍 좌측 전체 제품 검색 (관리명/브랜드/카테고리)" oninput="renderCatalogProductPanels()" style="width:100%">
+        </div>
+
+        <div class="catalog-panels">
+          <div class="catalog-panel">
+            <div class="catalog-panel-title">전체 제품 — 클릭으로 추가</div>
+            <div class="catalog-product-list" id="catalogAllList"></div>
+          </div>
+          <div class="catalog-panel">
+            <div class="catalog-panel-title">선택된 제품 — 드래그(⠿)로 순서 조정</div>
+            <div class="catalog-product-list" id="catalogSelectedList"></div>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px">
+          <button class="btn btn-outline btn-sm" onclick="closeCatalogModal()">취소</button>
+          <button id="catalogSubmitBtn" class="btn btn-primary btn-sm" onclick="submitCatalog()">생성</button>
+        </div>
+      </div>
+
+      <!-- [요청] 결과 박스 — 모달 내부 오버레이로 z-index 우선순위 시각화 -->
+      <div id="catalogResultBox" class="catalog-result-overlay" style="display:none">
+        <div class="catalog-result-card">
+          <div class="catalog-result-icon">✓</div>
+          <div id="catalogResultTitle" class="catalog-result-title">카탈로그 생성됨</div>
+          <div class="catalog-result-hint">아래 URL을 인플루언서에게 전달하세요</div>
+          <div id="catalogResultUrl" class="catalog-result-url"></div>
+          <div class="catalog-result-actions">
+            <button class="btn btn-outline" onclick="copyResultUrl()">📋 URL 복사</button>
+            <button class="btn btn-primary" onclick="closeCatalogModal()">닫기</button>
+          </div>
+        </div>
       </div>
     </div>
   </div>
