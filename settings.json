@@ -2,6 +2,7 @@
   "mailBcc": "ym.jung@undefiancecorp.com",
   "adminPassword": "djsel1!",
   "headless": false,
+  "catalogPublicBaseUrl": "https://unx-company-gonggu.vercel.app/recommend/",
   "instagram": {
     "username": "unx_judy",
     "password": "djsdprtm1!"
