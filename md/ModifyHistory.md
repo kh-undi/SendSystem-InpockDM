@@ -22,6 +22,9 @@
 
 
 [ 작업완료 ]
+## 제품 목록 textarea 높이 고정 (26.05.20)
+[public/index.html:1068-1073](public/index.html#L1068-L1073) 제품관리 > 제품 목록 카드의 두 textarea에 `rows` 확대 — "제품 특징 (USP)" `rows="3"→"8"`, "제안 / 메일 내용" `rows="4"→"15"`. 공통 `min-height:80px`/`resize:vertical` 스타일은 유지되어 사용자가 더 늘릴 수 있음. 다른 textarea(서명/메모/후킹/leads 등) 무영향.
+
 ## 추천 카탈로그 공개 페이지 — 로그인 없이 접근 허용 (26.05.20)
 [server.js:43](server.js#L43) `authRequired` 미들웨어에 `if (req.path.startsWith('/recommend')) return next();` 한 줄 추가. `/favicon.ico` 예외 패턴 그대로. ngrok 경유 시 `/recommend/?c=<code>`가 `/login`으로 리다이렉트되어 인플루언서가 카탈로그 못 보던 문제 해결. 노출 범위는 `/recommend/` 폴더 정적 4개 파일 + Supabase `get_catalog_by_code` RPC(정확한 code 알아야 1건씩 조회) — 관리 UI/`/api/*`/`/assets/*`는 인증 유지. Vercel 분리 배포본과 동일 정책으로 맞춤.
 

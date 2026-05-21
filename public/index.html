@@ -1065,11 +1065,13 @@
             </div>
             <div class="form-group">
               <label><span style="color:#ef4444;margin-right:2px">*</span>제품 특징 (USP)</label>
-              <textarea rows="3" onchange="products[${i}].usp=this.value" onclick="event.stopPropagation()">${esc(p.usp)}</textarea>
+              <!-- [요청] 제품 목록 textarea 높이 고정 — rows 3→8 -->
+              <textarea rows="8" onchange="products[${i}].usp=this.value" onclick="event.stopPropagation()">${esc(p.usp)}</textarea>
             </div>
             <div class="form-group">
               <label><span style="color:#ef4444;margin-right:2px">*</span>제안 / 메일 내용</label>
-              <textarea rows="4" onchange="products[${i}].offerMessage=this.value" onclick="event.stopPropagation()">${esc(p.offerMessage)}</textarea>
+              <!-- [요청] 제품 목록 textarea 높이 고정 — rows 4→15 -->
+              <textarea rows="15" onchange="products[${i}].offerMessage=this.value" onclick="event.stopPropagation()">${esc(p.offerMessage)}</textarea>
             </div>
             <!-- [요청] 제품 목록 필드 확장 — 후킹문구 동적 리스트 / [요청] 후킹문구 아코디언 -->
             <div class="form-group">
