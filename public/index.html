@@ -2192,6 +2192,14 @@
         filtered = filtered.filter(l => l.finalStatus !== 'pending');
       }
 
+      // [요청] 진행 중 상단 + 관심 연락일 최신순
+      filtered.sort((a, b) => {
+        const ap = a.finalStatus === 'pending' ? 0 : 1;
+        const bp = b.finalStatus === 'pending' ? 0 : 1;
+        if (ap !== bp) return ap - bp;
+        return (b.repliedAt || '').localeCompare(a.repliedAt || '');
+      });
+
       document.getElementById('leadsCount').textContent = leads.length;
       document.getElementById('leadsFilterCount').textContent =
         filter === 'all' ? '' : `(${filtered.length}/${leads.length})`;

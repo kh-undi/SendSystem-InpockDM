@@ -22,6 +22,9 @@
 
 
 [ 작업완료 ]
+## 리드 관리 — 진행 중 상단 고정 + 관심 연락일 최신순 정렬 (26.05.21)
+[public/index.html:2194-2200](public/index.html#L2194-L2200) `renderLeads()` 안에서 필터 후 tbody 렌더 직전에 `filtered.sort()` 추가. 1차 키 `finalStatus === 'pending' ? 0 : 1` ASC(진행 중을 위로), 2차 키 `repliedAt` DESC(`localeCompare`로 ISO 날짜 문자열 안전 비교, 빈 값은 그룹 내 맨 뒤). JS `sort`가 stable이라 동률 시 원래 순서 보존. API/repo/스키마 무변경, 60초 폴링에서도 자동 적용. 필터(전체/리마인드 필요/진행 중/완료)에도 동일 정렬 적용됨.
+
 ## 제품 목록 textarea 높이 고정 (26.05.20)
 [public/index.html:1068-1073](public/index.html#L1068-L1073) 제품관리 > 제품 목록 카드의 두 textarea에 `rows` 확대 — "제품 특징 (USP)" `rows="3"→"8"`, "제안 / 메일 내용" `rows="4"→"15"`. 공통 `min-height:80px`/`resize:vertical` 스타일은 유지되어 사용자가 더 늘릴 수 있음. 다른 textarea(서명/메모/후킹/leads 등) 무영향.
 
