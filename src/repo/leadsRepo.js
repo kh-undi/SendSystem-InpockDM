@@ -1,6 +1,7 @@
 // [요청] 리드 관리 탭 신설 (답장 온 인플루언서 추적) — leads repo (dual-mode)
 // list() 반환 구조: { id, nickname, profileUrl, interestedProductName, suitableProductNote,
-//                     repliedAt, proposalSentAt, remindAt, finalStatus, notes, createdAt, updatedAt }
+//                     repliedAt, proposalSentAt, remindAt, finalStatus, notes,
+//                     collaborationConverted, createdAt, updatedAt }
 // 날짜 필드는 ISO 'YYYY-MM-DD' 문자열 또는 null.
 const fs = require('fs');
 const config = require('../../config');
@@ -45,6 +46,8 @@ function normalizeIncoming(payload) {
     remind_at: remindAt,
     final_status: sanitizeStatus(payload.finalStatus),
     notes: payload.notes || null,
+    // [요청] 리드 관리 — 카톡전환 컬럼/체크박스
+    collaboration_converted: !!payload.collaborationConverted,
   };
 }
 
@@ -61,6 +64,8 @@ function rowToLead(r) {
     remindAt: r.remind_at || '',
     finalStatus: r.final_status || 'pending',
     notes: r.notes || '',
+    // [요청] 리드 관리 — 카톡전환 컬럼/체크박스
+    collaborationConverted: !!r.collaboration_converted,
     createdAt: r.created_at || null,
     updatedAt: r.updated_at || null,
   };

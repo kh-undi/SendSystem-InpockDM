@@ -573,6 +573,9 @@
                 <th>리마인드 필요일</th>
                 <th>어울릴만한 제품</th>
                 <th>최종 결과</th>
+                <!-- [요청] 리드 관리 — 카톡전환 컬럼/체크박스 + 표에 메모란 노출 -->
+                <th>카톡전환</th>
+                <th>메모</th>
                 <th style="width:160px">액션</th>
               </tr>
             </thead>
@@ -2214,13 +2217,17 @@
 
       const tbody = document.getElementById('leadsBody');
       if (!filtered.length) {
-        tbody.innerHTML = `<tr><td colspan="8" class="leads-empty">${leads.length === 0 ? '등록된 리드가 없습니다. "+ 리드 추가"로 시작하세요.' : '필터에 해당하는 리드가 없습니다.'}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="10" class="leads-empty">${leads.length === 0 ? '등록된 리드가 없습니다. "+ 리드 추가"로 시작하세요.' : '필터에 해당하는 리드가 없습니다.'}</td></tr>`;
         return;
       }
       tbody.innerHTML = filtered.map(l => {
         const due = isDue(l, today);
         const statusClass = `lead-status-${l.finalStatus || 'pending'}`;
         const statusLabel = l.finalStatus === 'pending' ? '진행 중' : l.finalStatus;
+        // [요청] 리드 관리 — 카톡전환 컬럼/체크박스 + 표에 메모란 노출
+        const collabCell = l.collaborationConverted
+          ? '<span title="카톡전환됨" style="color:#16a34a;font-weight:600">✅</span>'
+          : '<span style="color:#d1d5db">—</span>';
         return `<tr class="${due ? 'due' : ''}">
           <td><b>${esc(l.nickname || '')}</b>${l.profileUrl ? `<br><a href="${esc(l.profileUrl)}" target="_blank" style="font-size:11px;color:#6b7280">${esc(l.profileUrl)}</a>` : ''}</td>
           <td>${esc(l.interestedProductName || '-')}</td>
@@ -2229,6 +2236,8 @@
           <td>${due ? `<b style="color:#b91c1c">${esc(l.remindAt)}</b>` : esc(l.remindAt || '-')}</td>
           <td style="max-width:200px;white-space:pre-wrap;color:#6b7280;font-size:12px">${esc(l.suitableProductNote || '-')}</td>
           <td><span class="lead-status ${statusClass}">${esc(statusLabel || '진행 중')}</span></td>
+          <td style="text-align:center">${collabCell}</td>
+          <td style="max-width:200px;white-space:pre-wrap;color:#6b7280;font-size:12px">${esc(l.notes || '-')}</td>
           <td>
             <button class="btn btn-outline btn-sm" onclick="openLeadModal(${l.id})">수정</button>
             <button class="btn btn-danger btn-sm" onclick="deleteLead(${l.id})">삭제</button>
@@ -2263,6 +2272,8 @@
       document.getElementById('leadFinalStatus').value = lead?.finalStatus || 'pending';
       document.getElementById('leadSuitableNote').value = lead?.suitableProductNote || '';
       document.getElementById('leadNotes').value = lead?.notes || '';
+      // [요청] 리드 관리 — 카톡전환 체크박스 복원
+      document.getElementById('leadCollabConverted').checked = !!lead?.collaborationConverted;
 
       // [요청] 리드 관리 — proposal_sent_at 변경 시 remind_at 자동 미리채움 (사용자가 덮어쓸 수 있음)
       document.getElementById('leadProposalSentAt').onchange = function() {
@@ -2306,6 +2317,8 @@
         finalStatus: document.getElementById('leadFinalStatus').value,
         suitableProductNote: document.getElementById('leadSuitableNote').value.trim(),
         notes: document.getElementById('leadNotes').value.trim(),
+        // [요청] 리드 관리 — 카톡전환 체크박스
+        collaborationConverted: document.getElementById('leadCollabConverted').checked,
       };
       const url = editingLeadId ? `/api/leads/${editingLeadId}` : '/api/leads';
       const method = editingLeadId ? 'PUT' : 'POST';
@@ -2729,14 +2742,24 @@
           <input id="leadRemindAt" type="date">
         </div>
       </div>
-      <div class="form-group" style="margin-bottom:0">
-        <label>최종 결과</label>
-        <select id="leadFinalStatus">
-          <option value="pending">진행 중 (pending)</option>
-          <option value="공구진행">공구진행</option>
-          <option value="거절">거절</option>
-          <option value="무응답">무응답</option>
-        </select>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:end">
+        <div class="form-group" style="margin-bottom:0">
+          <label>최종 결과</label>
+          <select id="leadFinalStatus">
+            <option value="pending">진행 중 (pending)</option>
+            <option value="공구진행">공구진행</option>
+            <option value="거절">거절</option>
+            <option value="무응답">무응답</option>
+          </select>
+        </div>
+        <!-- [요청] 리드 관리 — 카톡전환 체크박스 -->
+        <div class="form-group" style="margin-bottom:0">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:10px 12px;border:1px solid #e5e7eb;border-radius:8px;background:#f9fafb">
+            <input id="leadCollabConverted" type="checkbox" style="width:18px;height:18px;cursor:pointer">
+            <span>카톡전환</span>
+            <span style="font-size:11px;color:#9ca3af;font-weight:400">(카톡방 생성)</span>
+          </label>
+        </div>
       </div>
       <div class="form-group" style="margin-bottom:0">
         <label>어울릴만한 제품 <span style="font-size:11px;color:#9ca3af;font-weight:400">(자유 입력 — 포맷 추후 결정)</span></label>

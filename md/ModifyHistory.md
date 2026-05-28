@@ -22,6 +22,12 @@
 
 
 [ 작업완료 ]
+## 리드 관리 — 카톡전환 컬럼/체크박스 + 표에 메모란 노출 (26.05.27)
+- **DB 스키마** [scripts/schema.sql](scripts/schema.sql): `leads` 테이블 정의에 `collaboration_converted boolean not null default false` 컬럼 추가. 파일 하단 마이그레이션 블록에 `alter table leads add column if not exists collaboration_converted boolean not null default false;` 1줄 추가. ⚠️ 운영 Supabase는 SQL Editor에서 ALTER 1줄 1회 실행 필요.
+- **Repo** [src/repo/leadsRepo.js](src/repo/leadsRepo.js): `rowToLead()`에 `collaborationConverted: !!r.collaboration_converted` 추가, `normalizeIncoming()`에 `collaboration_converted: !!payload.collaborationConverted` 추가. Supabase/JSON 양 모드 자동 적용. 파일 상단 list() 반환 구조 주석도 갱신.
+- **UI 모달** [public/index.html](public/index.html) `#leadModal`: "최종 결과"를 1fr/1fr grid로 감싸 우측에 카톡전환 체크박스(`#leadCollabConverted`) form-group 추가 — 보조박스 톤(연회색 보더 + 라운드 + 호버 가능 라벨). `openLeadModal()`에 복원, `saveLead()` payload에 `collaborationConverted` 포함.
+- **UI 테이블** [public/index.html](public/index.html) `#leadsTable`: thead 7→9 데이터 컬럼 ("최종 결과" 뒤에 "카톡전환", "메모" 추가). `renderLeads()` tbody 매핑에 두 셀 추가 — 카톡전환은 ✅(`#16a34a`)/—(연회색)로 중앙 정렬, 메모는 `suitableProductNote`와 동일 스타일(`max-width:200px;white-space:pre-wrap;color:#6b7280;font-size:12px`). empty row `colspan="8"` → `colspan="10"`. 정렬/필터/due 강조 로직 무변경.
+
 ## 리드 관리 — 진행 중 상단 고정 + 관심 연락일 최신순 정렬 (26.05.21)
 [public/index.html:2194-2200](public/index.html#L2194-L2200) `renderLeads()` 안에서 필터 후 tbody 렌더 직전에 `filtered.sort()` 추가. 1차 키 `finalStatus === 'pending' ? 0 : 1` ASC(진행 중을 위로), 2차 키 `repliedAt` DESC(`localeCompare`로 ISO 날짜 문자열 안전 비교, 빈 값은 그룹 내 맨 뒤). JS `sort`가 stable이라 동률 시 원래 순서 보존. API/repo/스키마 무변경, 60초 폴링에서도 자동 적용. 필터(전체/리마인드 필요/진행 중/완료)에도 동일 정렬 적용됨.
 

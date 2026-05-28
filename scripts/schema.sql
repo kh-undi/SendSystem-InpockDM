@@ -206,6 +206,8 @@ create table if not exists leads (
   final_status             text        not null default 'pending'
                            check (final_status in ('pending','거절','공구진행','무응답')),
   notes                    text,
+  -- [요청] 리드 관리 — 카톡전환 컬럼/체크박스 + 표에 메모란 노출
+  collaboration_converted  boolean     not null default false,
   created_at               timestamptz not null default now(),
   updated_at               timestamptz not null default now()
 );
@@ -339,3 +341,10 @@ alter table products add column if not exists hurdle                 text;
 alter table products add column if not exists schedule               text;
 alter table products add column if not exists memo                   text;
 alter table products add column if not exists age_range              text;
+
+-- [요청] 제안 메시지 분리 — 기존 테이블용 마이그레이션
+alter table products add column if not exists suggest_new_influencer      text;
+alter table products add column if not exists suggest_existing_influencer text;
+
+-- [요청] 리드 관리 — 카톡전환 컬럼/체크박스 + 표에 메모란 노출
+alter table leads add column if not exists collaboration_converted boolean not null default false;
