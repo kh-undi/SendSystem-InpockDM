@@ -1,5 +1,5 @@
 {
-  "mailBcc": "ym.jung@undefiancecorp.com",
+  "mailBcc": "",
   "adminPassword": "djsel1!",
   "headless": false,
   "catalogPublicBaseUrl": "https://unx-company-gonggu.vercel.app/recommend/",

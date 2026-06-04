@@ -16,12 +16,30 @@
   - **옵션 4** 하이브리드 — 옵션1로 후보 10개 추리고 옵션3이 순위 매기기.
 - 갈피 잡히면 위 옵션 중 하나(또는 별안)로 정식 요청 예정. 그 전까진 코드 수정 없음.
 
+## 답장확인 '거절' 표시하기
+<div role="link" tabindex="-1" class="css-16qcn4y"><div class="css-1yo7vlv"><div class="css-1a42sk4" width="48"><img src="https://d13k46lqgoj3d6.cloudfront.net/2025/5/29/2025-5-29-1748521327425.webp?w=300" width="48" class="css-14kdq5w"></div><div class="css-1o9ehop"><div class="css-7luk43"><p class="inpock-typography paragraph-2">happy.jiwoo</p><span class="inpock-typography small-text sendbird-channel-preview__content__upper__last-message-at" style="color: rgb(151, 151, 151); word-break: keep-all; min-width: 60px; text-align: end;">10:59</span></div><span class="inpock-typography small-text css-f2ehsn" style="color: rgb(151, 151, 151);">공동구매 <span class="text-gray-300">|</span> 시너지업팩토리 <span class="text-gray-300">|</span> 알파10.5</span><div class="css-7luk43"><p class="inpock-typography paragraph-2 sendbird-channel-preview__content__lower__last-message line-clamp" style="color: rgb(151, 151, 151); -webkit-line-clamp: 1;">(제안 거절) 상대방과 더 이상 대화할 수 없는 채팅방 입니다.</p></div></div></div></div>
 
+거절일 경우 '제안 거절' 메시지에 남겨져있음. 이럴경우 
+N명에게서 답장 (M명 거절)
+이렇게 표기 하도록
 
 
 
 
 [ 작업완료 ]
+## 고아 크롬 프로세스 누적 차단 — 프로세스 트리 강제 종료 (26.06.04)
+컴퓨터가 종종 꺼지는 증상의 가장 유력한 원인. Windows에서 `child.kill('SIGTERM'/'SIGKILL')`은 TerminateProcess로 변환돼 spawn된 node 자식만 죽이고, 그 node가 띄운 Playwright chromium(chrome.exe) 손자들은 고아로 남는다. 강제 종료라 자식 스크립트의 `finally{ browser.close() }`([src/index.js:211](src/index.js#L211)·[src/checkReplies.js:116](src/checkReplies.js#L116))도 실행 안 됨. "발송/답장확인 중단" 누를 때마다, 또 서버 재시작 시마다 chrome.exe 트리가 고아로 쌓여 RAM/CPU 점유 → 프리징/발열 셧다운.
+- [server.js:465](server.js#L465) `killProcessTree(proc, signal)` 헬퍼 신설. win32면 `taskkill /pid <pid> /T(트리) /F(강제)`를 `stdio:'ignore'`로 spawn(실패 시 `proc.kill('SIGKILL')` 폴백), 그 외 OS는 기존처럼 `proc.kill(signal)`.
+- 중단 엔드포인트 교체: [server.js](server.js) `/api/macro/stop`·`/api/replies/stop`의 `proc.kill()` → `killProcessTree()`. force 분기(즉시 null + 로그)는 유지. Windows에선 `/F`라 force 여부와 무관히 트리 강제 종료.
+- 서버 종료 정리: [server.js](server.js) 하단에 `shutdownCleanup()` + `process.on('SIGINT'|'SIGTERM')` 추가. Ctrl+C/재시작 시 실행 중이던 `macroProcess`/`replyProcess` 트리를 죽이고 300ms 후 exit(중복 호출 방지 플래그). 서버가 죽으며 자식+chromium이 고아로 남던 경로 차단.
+- `node --check` 통과. 참고: 인스타 분석(`instagramScraper`)은 server 프로세스 내부 인라인 실행이라 별도 spawn 없음 → shutdownCleanup의 process 종료로 함께 정리됨. ⚠️ 기존에 이미 쌓인 고아 chrome.exe는 작업관리자에서 1회 수동 정리 필요.
+
+## 로그 무한 증가로 인한 메모리 누수 차단 — macroLogs/replyLogs 상한 (26.06.04)
+컴퓨터가 종종 꺼지는 증상 점검 중 발견. [server.js](server.js)의 `macroLogs`(발송)·`replyLogs`(답장확인) 배열이 한 번도 잘리지 않아 상시 떠있는 server 프로세스 힙에 무제한 누적되던 문제. `/api/macro/status`·`/api/replies/status` 폴링마다 배열 전체를 JSON 직렬화해 메모리·CPU가 동반 상승했음. `leadsLogs`(200줄)·`instagramScraper`(300줄)는 이미 상한이 있었으나 정작 출력이 가장 많은 두 로그만 무제한이었음.
+- [server.js:449](server.js#L449) `MAX_LOG_LINES = 500` 상수 + `pushMacroLog(...items)`/`pushReplyLog(...items)` 헬퍼 신설. push 후 `slice(-MAX_LOG_LINES)`로 최근 500줄만 유지(초과 시에만 재할당).
+- 모든 직접 `macroLogs.push`/`replyLogs.push` 호출부를 헬퍼로 교체: 발송 stdout/stderr/close([server.js](server.js) `/api/macro/start`), 발송 중단([server.js](server.js) `/api/macro/stop`), 답장확인 stdout/stderr/close + 강제/일반 중단([server.js](server.js) `/api/replies/check`·`/api/replies/stop`), 크론 답장확인 핸들러([server.js](server.js) `30 8,10,12,14,16 ...`). `= []` 초기화는 그대로 유지.
+- 상한 500은 UI 실시간 로그 가독성(최근 이력 충분)과 메모리 사이 균형값. `node --check` 통과. 별도 마이그레이션/스키마 변경 없음.
+
 ## 리드 관리 — 카톡전환 컬럼/체크박스 + 표에 메모란 노출 (26.05.27)
 - **DB 스키마** [scripts/schema.sql](scripts/schema.sql): `leads` 테이블 정의에 `collaboration_converted boolean not null default false` 컬럼 추가. 파일 하단 마이그레이션 블록에 `alter table leads add column if not exists collaboration_converted boolean not null default false;` 1줄 추가. ⚠️ 운영 Supabase는 SQL Editor에서 ALTER 1줄 1회 실행 필요.
 - **Repo** [src/repo/leadsRepo.js](src/repo/leadsRepo.js): `rowToLead()`에 `collaborationConverted: !!r.collaboration_converted` 추가, `normalizeIncoming()`에 `collaboration_converted: !!payload.collaborationConverted` 추가. Supabase/JSON 양 모드 자동 적용. 파일 상단 list() 반환 구조 주석도 갱신.

@@ -446,6 +446,42 @@ app.get('/api/instagram/status', (req, res) => {
 let macroProcess = null;
 let macroLogs = [];
 
+// [요청] 로그 무한 증가로 인한 메모리 누수 방지 — macroLogs/replyLogs를 최근 N줄만 유지.
+//   기존엔 발송/답장확인 stdout이 상시 떠있는 server 프로세스 힙에 무제한 누적됐고,
+//   /api/macro|replies/status 폴링마다 배열 전체를 JSON 직렬화해 메모리·CPU가 동반 상승했음.
+//   leadsLogs(200)·instagramScraper(300) 패턴과 동일하게 상한을 둔다.
+const MAX_LOG_LINES = 500;
+function pushMacroLog(...items) {
+  macroLogs.push(...items);
+  if (macroLogs.length > MAX_LOG_LINES) macroLogs = macroLogs.slice(-MAX_LOG_LINES);
+}
+function pushReplyLog(...items) {
+  replyLogs.push(...items);
+  if (replyLogs.length > MAX_LOG_LINES) replyLogs = replyLogs.slice(-MAX_LOG_LINES);
+}
+
+// [요청] 고아 크롬 프로세스 누적 방지 — 자식 프로세스를 "트리 전체"로 강제 종료.
+//   Windows의 child.kill()은 TerminateProcess로 변환돼 node 자식만 죽이고,
+//   그 node가 띄운 Playwright chromium(chrome.exe) 손자들은 고아로 남는다.
+//   고아 chrome이 누적되면 RAM/CPU를 점유 → 시스템 프리징/발열 셧다운의 주원인.
+//   또한 강제 종료 시 자식 스크립트의 finally{ browser.close() }가 실행되지 않으므로
+//   반드시 트리 단위로 죽여야 한다. → taskkill /T(자식 트리) /F(강제).
+function killProcessTree(proc, signal = 'SIGTERM') {
+  if (!proc || proc.pid == null) return;
+  if (process.platform === 'win32') {
+    try {
+      const { spawn } = require('child_process');
+      // detached + 출력 무시로 좀비 핸들 남기지 않음
+      const tk = spawn('taskkill', ['/pid', String(proc.pid), '/T', '/F'], { stdio: 'ignore' });
+      tk.on('error', () => { try { proc.kill('SIGKILL'); } catch {} });
+    } catch {
+      try { proc.kill('SIGKILL'); } catch {}
+    }
+  } else {
+    try { proc.kill(signal); } catch {}
+  }
+}
+
 app.post('/api/macro/start', async (req, res) => {
   if (macroProcess) return res.status(400).json({ error: '이미 실행 중입니다.' });
 
@@ -491,16 +527,16 @@ app.post('/api/macro/start', async (req, res) => {
 
   macroProcess.stdout.on('data', (data) => {
     const lines = data.toString().split('\n').filter(l => l.trim());
-    macroLogs.push(...lines);
+    pushMacroLog(...lines);
   });
 
   macroProcess.stderr.on('data', (data) => {
     const lines = data.toString().split('\n').filter(l => l.trim());
-    macroLogs.push(...lines.map(l => `[ERROR] ${l}`));
+    pushMacroLog(...lines.map(l => `[ERROR] ${l}`));
   });
 
   macroProcess.on('close', (code) => {
-    macroLogs.push(`\n[완료] 프로세스 종료 (코드: ${code})`);
+    pushMacroLog(`\n[완료] 프로세스 종료 (코드: ${code})`);
     macroProcess = null;
   });
 
@@ -509,9 +545,10 @@ app.post('/api/macro/start', async (req, res) => {
 
 app.post('/api/macro/stop', (req, res) => {
   if (!macroProcess) return res.status(400).json({ error: '실행 중인 매크로가 없습니다.' });
-  macroProcess.kill('SIGTERM');
+  // [요청] 고아 크롬 방지 — 프로세스 트리 전체 강제 종료
+  killProcessTree(macroProcess);
   macroProcess = null;
-  macroLogs.push('[중단] 사용자에 의해 중단됨');
+  pushMacroLog('[중단] 사용자에 의해 중단됨');
   res.json({ ok: true });
 });
 
@@ -540,14 +577,14 @@ app.post('/api/replies/check', (req, res) => {
 
   replyProcess.stdout.on('data', (data) => {
     const lines = data.toString().split('\n').filter(l => l.trim());
-    replyLogs.push(...lines);
+    pushReplyLog(...lines);
   });
   replyProcess.stderr.on('data', (data) => {
     const lines = data.toString().split('\n').filter(l => l.trim());
-    replyLogs.push(...lines.map(l => `[ERROR] ${l}`));
+    pushReplyLog(...lines.map(l => `[ERROR] ${l}`));
   });
   replyProcess.on('close', (code) => {
-    replyLogs.push(`\n[완료] 프로세스 종료 (코드: ${code})`);
+    pushReplyLog(`\n[완료] 프로세스 종료 (코드: ${code})`);
     replyProcess = null;
   });
 
@@ -558,12 +595,13 @@ app.post('/api/replies/stop', (req, res) => {
   if (!replyProcess) return res.status(400).json({ error: '실행 중이 아닙니다.' });
   const force = !!(req.body && req.body.force);
   const signal = force ? 'SIGKILL' : 'SIGTERM';
-  replyProcess.kill(signal);
+  // [요청] 고아 크롬 방지 — 프로세스 트리 전체 강제 종료 (Windows에선 force 여부와 무관히 /F)
+  killProcessTree(replyProcess, signal);
   if (force) {
     replyProcess = null;
-    replyLogs.push('[강제 종료] 사용자에 의해 강제 종료됨');
+    pushReplyLog('[강제 종료] 사용자에 의해 강제 종료됨');
   } else {
-    replyLogs.push('[중단] 사용자에 의해 중단됨');
+    pushReplyLog('[중단] 사용자에 의해 중단됨');
   }
   res.json({ ok: true, force });
 });
@@ -747,17 +785,32 @@ cron.schedule('30 8,10,12,14,16 * * 1-5', () => {
 
   replyProcess.stdout.on('data', (data) => {
     const lines = data.toString().split('\n').filter(l => l.trim());
-    replyLogs.push(...lines);
+    pushReplyLog(...lines);
   });
   replyProcess.stderr.on('data', (data) => {
     const lines = data.toString().split('\n').filter(l => l.trim());
-    replyLogs.push(...lines.map(l => `[ERROR] ${l}`));
+    pushReplyLog(...lines.map(l => `[ERROR] ${l}`));
   });
   replyProcess.on('close', (code) => {
-    replyLogs.push(`\n[완료] 프로세스 종료 (코드: ${code})`);
+    pushReplyLog(`\n[완료] 프로세스 종료 (코드: ${code})`);
     replyProcess = null;
   });
 });
+
+// [요청] 고아 크롬 방지 — 서버 종료(Ctrl+C / 재시작) 시 실행 중이던 자식 트리 정리.
+//   서버가 죽으면 spawn된 매크로/답장확인 node와 그 chromium 손자들이 고아로 남으므로,
+//   종료 직전에 트리 단위로 죽이고 빠져나간다. (중복 호출 방지 플래그)
+let shuttingDown = false;
+function shutdownCleanup() {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  killProcessTree(macroProcess);
+  killProcessTree(replyProcess);
+  // taskkill은 비동기 spawn이라 약간의 여유를 두고 종료
+  setTimeout(() => process.exit(0), 300);
+}
+process.on('SIGINT', shutdownCleanup);
+process.on('SIGTERM', shutdownCleanup);
 
 // ─── 서버 시작 ───
 app.listen(PORT, () => {
