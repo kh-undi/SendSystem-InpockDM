@@ -19,6 +19,11 @@
     .tab { padding: 14px 24px; cursor: pointer; font-size: 14px; font-weight: 600; color: #6b7280; border-bottom: 3px solid transparent; transition: all 0.2s; }
     .tab:hover { color: #6366f1; }
     .tab.active { color: #6366f1; border-bottom-color: #6366f1; }
+    /* [요청] 탭 2depth — 하위 서브탭 바 */
+    .subtabs { display: flex; background: #f9fafb; border-bottom: 1px solid #e5e7eb; padding: 0 24px; }
+    .subtab { padding: 10px 18px; cursor: pointer; font-size: 13px; font-weight: 600; color: #6b7280; border-bottom: 2px solid transparent; transition: all 0.2s; }
+    .subtab:hover { color: #6366f1; }
+    .subtab.active { color: #6366f1; border-bottom-color: #6366f1; }
 
     /* 컨텐츠 */
     .content { max-width: 1600px; margin: 0 auto; padding: 24px; }
@@ -141,6 +146,9 @@
       .content { padding: 12px; }
       .tabs { overflow-x: auto; }
       .tab { white-space: nowrap; padding: 12px 16px; font-size: 13px; }
+      /* [요청] 탭 2depth — 모바일 서브탭 */
+      .subtabs { overflow-x: auto; }
+      .subtab { white-space: nowrap; padding: 10px 14px; }
     }
 
     /* [요청] 인스타분석 스피너 */
@@ -246,10 +254,9 @@
 
   <div class="tabs">
     <div class="tab active" data-panel="products">제품 관리</div>
-    <div class="tab" data-panel="influencers">인플루언서</div>
-    <div class="tab" data-panel="run">실행</div>
-    <div class="tab" data-panel="replies">답장 확인</div>
-    <!-- [요청] 리드 관리 탭 신설 — 답장 확인 우측 -->
+    <!-- [요청] 탭 2depth — '인포크/메일 제안' 하위에 인플루언서/실행/인포크 확인 묶음 -->
+    <div class="tab" data-group="inpock">인포크/메일 제안</div>
+    <!-- [요청] 리드 관리 탭 신설 — 인포크/메일 제안 우측 -->
     <div class="tab" data-panel="leads">리드 관리 <span class="leads-due-badge" id="leadsDueBadge" style="display:none">0</span></div>
     <!-- [요청] 추천 카탈로그 페이지 — 인플루언서별 큐레이션 공유 링크 -->
     <div class="tab" data-panel="catalogs">제품추천생성</div>
@@ -257,6 +264,14 @@
     <div class="tab" data-panel="phrases">유틸리티</div>
     <!-- [요청] 인스타그램 URL → 평균 릴스 통계 조회 -->
     <div class="tab" data-panel="instagram">📊 인스타분석(미완성)</div>
+  </div>
+
+  <!-- [요청] 탭 2depth — '인포크/메일 제안' 하위 서브탭 바 (상위 탭 활성 시에만 노출) -->
+  <div class="subtabs" id="subtabs-inpock" style="display:none">
+    <div class="subtab" data-panel="influencers">인플루언서</div>
+    <div class="subtab" data-panel="run">인포크/메일 발송</div>
+    <!-- [요청] '답장 확인' → '인포크 확인' 개명 (내부 식별자 replies는 유지) -->
+    <div class="subtab" data-panel="replies">인포크 답장 확인</div>
   </div>
 
   <div class="content">
@@ -559,13 +574,13 @@
       </div>
     </div>
 
-    <!-- ═══ 답장 확인 ═══ -->
+    <!-- ═══ 인포크 확인 ═══ -->
     <div class="panel" id="panel-replies">
       <div class="card">
         <div class="actions-bar">
-          <div class="card-title">답장 확인</div>
+          <div class="card-title">인포크 답장 확인</div>
           <div class="btn-group">
-            <button class="btn btn-success" id="btnCheckReplies" onclick="startCheckReplies()">답장 확인 시작</button>
+            <button class="btn btn-success" id="btnCheckReplies" onclick="startCheckReplies()">인포크 답장 확인 시작</button>
             <button class="btn btn-danger" id="btnStopReplies" onclick="stopCheckReplies()" style="display:none">중지</button>
             <button class="btn btn-danger" id="btnForceStopReplies" onclick="forceStopCheckReplies()" style="display:none">강제 종료</button>
           </div>
@@ -689,38 +704,59 @@
     // ═══════════════════════════════════════
     //  탭 전환
     // ═══════════════════════════════════════
+    // [요청] 탭 2depth — 패널 진입 시 데이터 재로드 등 공통 후처리
+    function onPanelEnter(panel) {
+      // 인포크 확인 탭 진입 시 배지 숨기고 확인 시각 저장 (내부 식별자 replies/repliesSeenAt 유지)
+      if (panel === 'replies') {
+        document.getElementById('headerReplyBadge').style.display = 'none';
+        localStorage.setItem('repliesSeenAt', new Date().toISOString());
+      }
+      // [요청] 리드 관리 탭 진입 시 최신 데이터 재로드
+      if (panel === 'leads') loadLeads();
+      // [요청] 추천 카탈로그 탭 진입 시 재로드
+      if (panel === 'catalogs') loadCatalogs();
+      // [요청] 자주 사용하는 문구 탭 진입 시 직원 목록 + 문구 재로드
+      if (panel === 'phrases') loadEmployees().then(renderPhraseTabs);
+      // [요청] 설정 탭 진입 시 직원 목록 재로드 (직원 관리 카드)
+      if (panel === 'accounts') loadEmployees().then(renderEmployeesAdmin);
+    }
+
+    // [요청] 탭 2depth — '인포크/메일 제안' 하위 서브탭 활성화 (panel 미지정 시 기본 인플루언서)
+    function activateInpockSub(panel) {
+      const target = panel || 'influencers';
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+      document.querySelector('.tab[data-group="inpock"]').classList.add('active');
+      document.getElementById('subtabs-inpock').style.display = 'flex';
+      document.querySelectorAll('.subtab').forEach(s => s.classList.toggle('active', s.dataset.panel === target));
+      document.getElementById('panel-' + target).classList.add('active');
+      onPanelEnter(target);
+    }
+
+    // 1depth 탭
     document.querySelectorAll('.tab').forEach(tab => {
       tab.addEventListener('click', () => {
+        // [요청] 그룹 탭(인포크/메일 제안)은 서브탭 바를 열고 기본 서브패널 활성
+        if (tab.dataset.group === 'inpock') {
+          activateInpockSub();
+          return;
+        }
         document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
         document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+        document.getElementById('subtabs-inpock').style.display = 'none';
         tab.classList.add('active');
         document.getElementById('panel-' + tab.dataset.panel).classList.add('active');
-        // 답장확인 탭 진입 시 배지 숨기고 확인 시각 저장
-        if (tab.dataset.panel === 'replies') {
-          document.getElementById('headerReplyBadge').style.display = 'none';
-          localStorage.setItem('repliesSeenAt', new Date().toISOString());
-        }
-        // [요청] 리드 관리 탭 진입 시 최신 데이터 재로드
-        if (tab.dataset.panel === 'leads') {
-          loadLeads();
-        }
-        // [요청] 추천 카탈로그 탭 진입 시 재로드
-        if (tab.dataset.panel === 'catalogs') {
-          loadCatalogs();
-        }
-        // [요청] 자주 사용하는 문구 탭 진입 시 직원 목록 + 문구 재로드
-        if (tab.dataset.panel === 'phrases') {
-          loadEmployees().then(renderPhraseTabs);
-        }
-        // [요청] 설정 탭 진입 시 직원 목록 재로드 (직원 관리 카드)
-        if (tab.dataset.panel === 'accounts') {
-          loadEmployees().then(renderEmployeesAdmin);
-        }
+        onPanelEnter(tab.dataset.panel);
       });
     });
 
+    // [요청] 탭 2depth — 2depth 서브탭
+    document.querySelectorAll('.subtab').forEach(sub => {
+      sub.addEventListener('click', () => activateInpockSub(sub.dataset.panel));
+    });
+
     // ═══════════════════════════════════════
-    //  헤더 답장 배지 (인포크 N건)
+    //  헤더 인포크 확인 배지 (인포크 N건)
     // ═══════════════════════════════════════
     async function updateReplyBadge() {
       try {
@@ -748,13 +784,15 @@
     }
 
     function goToRepliesTab() {
-      const repliesTab = document.querySelector('.tab[data-panel="replies"]');
-      if (repliesTab) repliesTab.click();
+      // [요청] 탭 2depth — '인포크 확인'은 인포크/메일 제안 하위 서브탭
+      activateInpockSub('replies');
     }
 
     function goToSettings() {
       document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
       document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+      // [요청] 탭 2depth — 설정 진입 시 서브탭 바 숨김
+      document.getElementById('subtabs-inpock').style.display = 'none';
       document.getElementById('panel-accounts').classList.add('active');
       // [요청] 설정 진입 시 직원 관리 카드 렌더
       loadEmployees().then(renderEmployeesAdmin);
@@ -1815,7 +1853,7 @@
     }
 
     // ═══════════════════════════════════════
-    //  답장 확인
+    //  인포크 확인 (구 답장 확인)
     // ═══════════════════════════════════════
     let repliesPolling = null;
 
@@ -1841,6 +1879,9 @@
       document.getElementById('btnStopReplies').style.display = 'inline-block';
       document.getElementById('btnForceStopReplies').style.display = 'inline-block';
       document.getElementById('repliesLogArea').textContent = '시작...\n';
+      // [요청] 헤더 뱃지 — 답장확인 중 표시
+      document.getElementById('headerStatus').textContent = '답장확인 중';
+      document.getElementById('headerStatus').style.background = 'rgba(99,102,241,0.3)';
       if (repliesPolling) clearInterval(repliesPolling);
       repliesPolling = setInterval(pollReplies, 1000);
     }
@@ -1885,10 +1926,15 @@
         `;
       }
 
+      // [요청] 헤더 뱃지 3분기 — 발송/답장확인 상호 배타라 단순 처리
+      const headerStatusEl = document.getElementById('headerStatus');
       if (data.running) {
         document.getElementById('btnCheckReplies').style.display = 'none';
         document.getElementById('btnStopReplies').style.display = 'inline-block';
         document.getElementById('btnForceStopReplies').style.display = 'inline-block';
+        // 페이지 새로고침/다중 PC 동기화 시에도 답장확인 중 반영
+        headerStatusEl.textContent = '답장확인 중';
+        headerStatusEl.style.background = 'rgba(99,102,241,0.3)';
         if (!repliesPolling) repliesPolling = setInterval(pollReplies, 1000);
       } else {
         clearInterval(repliesPolling);
@@ -1896,6 +1942,11 @@
         document.getElementById('btnCheckReplies').style.display = 'inline-block';
         document.getElementById('btnStopReplies').style.display = 'none';
         document.getElementById('btnForceStopReplies').style.display = 'none';
+        // 답장확인이 점유한 뱃지일 때만 '준비'로 되돌림 (발송 중/완료 뱃지는 건드리지 않음)
+        if (headerStatusEl.textContent === '답장확인 중') {
+          headerStatusEl.textContent = '준비';
+          headerStatusEl.style.background = 'rgba(255,255,255,0.2)';
+        }
       }
     }
 

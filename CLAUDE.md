@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 프로젝트 개요
 
-인포크링크(`business.inpock.co.kr`) 제안서를 Playwright로 자동 발송하는 매크로 + Gmail 이메일 발송 매크로 + 답장 확인 매크로. Express 관리 UI(`server.js`)가 모든 기능을 감싼다.
+인포크링크(`business.inpock.co.kr`) 제안서를 Playwright로 자동 발송하는 매크로 + Gmail 이메일 발송 매크로 + 인포크 확인 매크로. Express 관리 UI(`server.js`)가 모든 기능을 감싼다.
 
 ## 자주 쓰는 명령어
 
@@ -13,7 +13,7 @@ npm run ui            # 관리 UI 기동 (http://localhost:3000)
 npm start             # CLI로 매크로 실행 (UI 거치지 않고 바로)
 npm run dry-run       # 실제 제출 없이 전 과정만 수행 (검증용)
 npm run reset-counts  # 전 계정의 weeklyTracking 초기화
-npm run check-replies # 답장 확인 매크로 CLI 실행
+npm run check-replies # 인포크 확인 매크로 CLI 실행
 npm run tunnel        # cloudflared로 외부 임시 URL 발급 (ngrok은 md/how-to-run.md)
 ```
 
@@ -60,7 +60,7 @@ UI에서 "발송 시작"을 누르면 [server.js](server.js)가 `node src/index.
 - **DOM 셀렉터 중앙화**: 모든 인포크 사이트 셀렉터는 [src/selectors.js](src/selectors.js)에 있다. UI 변경으로 깨지면 여기만 고친다.
 - **BCC 하드코딩**: [config.js](config.js)의 `MAIL_BCC`가 모든 Gmail 발송에 강제 BCC로 붙는다. 값은 `settings.json`.
 
-### 답장 확인 파이프라인
+### 인포크 확인 파이프라인
 
 [src/checkReplies.js](src/checkReplies.js)는 각 계정으로 headless 로그인 → `sendbird-badge` 엘리먼트 개수로 답장 수 집계 → [src/repo/repliesRepo.js](src/repo/repliesRepo.js)가 계정 하나 끝날 때마다 실시간 기록.
 
@@ -102,7 +102,7 @@ UI에서 "발송 시작"을 누르면 [server.js](server.js)가 `node src/index.
 - `products` + `product_photos` (제품·사진 URL)
 - `influencers` (발송 큐 + 실패 기록 통합, `status=pending|sent|failed|skipped|sending`)
 - `sent_log` (append-only 감사 로그)
-- `reply_runs` + `replies` (답장 확인)
+- `reply_runs` + `replies` (인포크 확인)
 - `leads` (답장 온 인플루언서 추적 — replied_at/proposal_sent_at/remind_at/final_status)
 - `catalogs` (인플루언서 맞춤 추천 카탈로그 — code/product_ids/view_count)
 - Storage 버킷: `product-photos`, `signatures` (모두 public)
@@ -147,7 +147,7 @@ UI에서 "발송 시작"을 누르면 [server.js](server.js)가 `node src/index.
 
 ## 주의사항
 
-- `config.HEADLESS = false`가 기본 — 브라우저 창이 뜨는 건 의도다. 답장 확인만 `checkReplies.js` 내부에서 `headless: true`로 강제한다.
+- `config.HEADLESS = false`가 기본 — 브라우저 창이 뜨는 건 의도다. 인포크 확인만 `checkReplies.js` 내부에서 `headless: true`로 강제한다.
 - `products.json`(또는 DB)에 없는 `productName`을 가진 인플루언서가 있으면 [src/index.js](src/index.js)가 `process.exit(1)` — 제품명 매칭은 엄격하다.
 - **이미지 경로 혼재**: 현재 `assets/` 폴더는 (1) 마이그레이션 전 레거시 이미지, (2) UI 신규 업로드 임시저장, (3) 제안서용 로컬 캐시 3역할을 겸한다. 향후 정리 여지.
 - **Supabase 무료 프로젝트**: 7일 미접속 시 자동 pause. 이 프로젝트는 cron + 수동 접속으로 실질적으로 pause되지 않음.

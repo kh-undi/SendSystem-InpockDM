@@ -163,7 +163,7 @@ create table if not exists sent_log (
 create index if not exists idx_sent_log_time on sent_log(sent_at desc);
 
 ------------------------------------------------------------
--- 8. reply_runs + replies : 답장 확인 결과
+-- 8. reply_runs + replies : 인포크 확인 결과 (구 답장 확인)
 --    한 run은 모든 계정 순회를 의미. finished_at IS NULL 이면 '진행 중(partial)'.
 ------------------------------------------------------------
 create table if not exists reply_runs (

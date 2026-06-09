@@ -35,7 +35,22 @@ N명에게서 답장 (M명 거절)
 
 
 
+[ 실행계획 ]
+
 [ 작업완료 ]
+## 발송 ↔ 답장확인 상호 배타 + 헤더 뱃지 3분기 (26.06.09)
+발송과 답장확인을 동시 실행 못 하게 막고(기존엔 "발송 중→답장확인"만 차단되고 "답장확인 중→발송"은 뚫려 있던 비대칭 구멍), 우상단 헤더 뱃지를 발송/답장확인/준비 3분기로 표시.
+- **상호 배타** [server.js](server.js): `/api/macro/start`에 `if (replyProcess) return 400('답장확인이 실행 중입니다.')` 추가. 반대 방향(`/api/replies/check`의 macroProcess 체크)은 이미 존재 → 양방향 배타 완성. 둘 다 같은 인포크 계정 로그인/캐시클리어를 하므로 겹치면 세션 꼬임 방지가 목적.
+- **헤더 뱃지** [public/index.html](public/index.html): `startCheckReplies()`에서 시작 시 `headerStatus`를 `답장확인 중`(인디고 배경)으로. `pollReplies()` running 분기에서도 동일 세팅(새로고침/다중 PC 동기화 대응, 페이지 로드 시 `pollReplies()` 호출됨). 종료 분기에선 **뱃지 텍스트가 '답장확인 중'일 때만** '준비'로 복귀 → 발송의 `발송 중`/`완료` 뱃지를 덮어쓰지 않음(상호 배타라 동시 점유는 없지만 페이지 로드 비동기 순서 안전장치).
+- `node --check server.js` 통과. index.html은 수동 확인.
+
+## 탭 2depth 구조화 — '인포크/메일 제안' 하위로 묶기 + '답장 확인'→'인포크 확인' 개명 (26.06.09)
+인플루언서/실행/인포크 확인 세 탭을 상위 탭 '인포크/메일 제안'(1depth)의 하위 서브탭(2depth)으로 묶고, '답장 확인'을 '인포크 확인'으로 개명. 내부 식별자(`replies`, `repliesSeenAt`, `reply_runs`, `check-replies`, `checkReplies.js`)는 그대로 두고 한글 표시 텍스트만 변경.
+- **UI 구조** [public/index.html](public/index.html): `.tabs`에서 인플루언서/실행/답장 확인 3탭 제거 → `<div class="tab" data-group="inpock">인포크/메일 제안</div>` 1개로 대체. 바로 아래 `#subtabs-inpock` 서브탭 바 신설(인플루언서/실행/인포크 확인, `data-panel`은 influencers/run/replies 유지). CSS `.subtabs`/`.subtab`(+hover/active, 모바일 overflow) 추가.
+- **탭 전환 JS** [public/index.html](public/index.html): `onPanelEnter(panel)`로 패널 진입 후처리(배지·재로드) 공통화. `activateInpockSub(panel)` 신설 — 그룹 탭 활성+서브탭 바 표시+서브패널 활성. 1depth 핸들러는 `data-group==='inpock'`이면 서브탭 모드, 그 외엔 서브탭 바 숨김. `.subtab` 클릭 핸들러 신설. `goToRepliesTab()`→`activateInpockSub('replies')`, `goToSettings()`에 서브탭 바 숨김 1줄 추가.
+- **한글 텍스트 개명(답장 확인→인포크 확인)**: [public/index.html](public/index.html)(섹션 주석/카드 타이틀/버튼/주석), [server.js](server.js)(크론 로그·API 주석·Vercel/종료 주석), [src/checkReplies.js](src/checkReplies.js)(콘솔 로그·주석), [src/selectors.js](src/selectors.js)(chat 주석), [scripts/schema.sql](scripts/schema.sql)(reply_runs 주석), [CLAUDE.md](CLAUDE.md)(개요·명령어·파이프라인·테이블·주의사항). 결과 표시의 일반 단어 "답장"(예: "N명에게서 답장", "답장 없음", "답장 온 인플루언서[리드]")은 의미상 그대로 둠.
+- `node --check server.js src/checkReplies.js src/selectors.js` 통과. index.html은 수동 확인 필요(`npm run ui`).
+
 ## 자주 사용하는 문구 — 직원별 최대 3개 최상단 고정 (26.06.09)
 유틸리티 > 자주 사용하는 문구에서 직원별로 문구를 📌 최대 3개까지 최상단 고정. 고정분은 목록 맨 위에 노란 카드로 모이고, 4번째 고정은 서버가 막음(`PIN_LIMIT`→400).
 - **DB** [scripts/schema.sql](scripts/schema.sql): `phrases`에 `pinned boolean not null default false` 추가(create 정의 + 하단 `alter ... add column if not exists` 마이그레이션). ⚠️ 운영 Supabase는 이 ALTER 1줄 SQL Editor에서 1회 실행 필요.

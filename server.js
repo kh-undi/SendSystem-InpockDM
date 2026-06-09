@@ -459,7 +459,7 @@ let macroProcess = null;
 let macroLogs = [];
 
 // [요청] 로그 무한 증가로 인한 메모리 누수 방지 — macroLogs/replyLogs를 최근 N줄만 유지.
-//   기존엔 발송/답장확인 stdout이 상시 떠있는 server 프로세스 힙에 무제한 누적됐고,
+//   기존엔 발송/인포크 확인 stdout이 상시 떠있는 server 프로세스 힙에 무제한 누적됐고,
 //   /api/macro|replies/status 폴링마다 배열 전체를 JSON 직렬화해 메모리·CPU가 동반 상승했음.
 //   leadsLogs(200)·instagramScraper(300) 패턴과 동일하게 상한을 둔다.
 const MAX_LOG_LINES = 500;
@@ -496,6 +496,8 @@ function killProcessTree(proc, signal = 'SIGTERM') {
 
 app.post('/api/macro/start', async (req, res) => {
   if (macroProcess) return res.status(400).json({ error: '이미 실행 중입니다.' });
+  // [요청] 발송 ↔ 답장확인 상호 배타 — 답장확인 중이면 발송 시작 차단 (반대 방향은 /api/replies/check에 이미 있음)
+  if (replyProcess) return res.status(400).json({ error: '답장확인이 실행 중입니다.' });
 
   // [요청] 메일만 발송 옵션 — mailOnly 수신하여 자식 env로 전달
   const { dryRun, emailAccountId, mailOnly } = req.body || {};
@@ -571,7 +573,7 @@ app.get('/api/macro/status', (req, res) => {
   });
 });
 
-// ─── 답장 확인 API ───
+// ─── 인포크 확인 API (구 답장 확인) ───
 let replyProcess = null;
 let replyLogs = [];
 
@@ -875,21 +877,21 @@ async function checkLeadReminders() {
 }
 
 // [요청] Vercel 직원용 배포 — cron은 서버리스에서 동작하지 않으므로(인스턴스 휘발성)
-//   로컬/ngrok(매크로 운영 서버)에서만 등록. spawn 기반 답장확인도 Vercel에선 불가.
+//   로컬/ngrok(매크로 운영 서버)에서만 등록. spawn 기반 인포크 확인도 Vercel에선 불가.
 if (!process.env.VERCEL) {
 cron.schedule('0 9 * * *', () => {
   console.log('[크론] 리드 리마인드 체크 시작');
   checkLeadReminders();
 });
 
-// ─── 매일 오전,오후 총 5번 자동 답장확인 ───
+// ─── 매일 오전,오후 총 5번 자동 인포크 확인 ───
 cron.schedule('30 8,10,12,14,16 * * 1-5', () => {
   if (replyProcess || macroProcess) {
-    console.log('[크론] 답장확인 건너뜀 - 다른 프로세스 실행 중');
+    console.log('[크론] 인포크 확인 건너뜀 - 다른 프로세스 실행 중');
     return;
   }
   const hour = new Date().getHours();
-  console.log(`[크론] ${hour}시 자동 답장확인 시작`);
+  console.log(`[크론] ${hour}시 자동 인포크 확인 시작`);
   replyLogs = [];
   const { spawn } = require('child_process');
   replyProcess = spawn('node', [path.join(__dirname, 'src/checkReplies.js')], { cwd: __dirname });
@@ -910,7 +912,7 @@ cron.schedule('30 8,10,12,14,16 * * 1-5', () => {
 } // [요청] Vercel 가드 끝 — cron 블록 (위 if (!process.env.VERCEL))
 
 // [요청] 고아 크롬 방지 — 서버 종료(Ctrl+C / 재시작) 시 실행 중이던 자식 트리 정리.
-//   서버가 죽으면 spawn된 매크로/답장확인 node와 그 chromium 손자들이 고아로 남으므로,
+//   서버가 죽으면 spawn된 매크로/인포크 확인 node와 그 chromium 손자들이 고아로 남으므로,
 //   종료 직전에 트리 단위로 죽이고 빠져나간다. (중복 호출 방지 플래그)
 let shuttingDown = false;
 function shutdownCleanup() {
@@ -932,6 +934,6 @@ if (!process.env.VERCEL) {
   app.listen(PORT, () => {
     console.log(`\n  인포크링크 매크로 관리 UI`);
     console.log(`  http://localhost:${PORT}`);
-    console.log(`  [크론] 매일 일일 총 4번 자동 답장확인 활성화\n`);
+    console.log(`  [크론] 매일 일일 총 4번 자동 인포크 확인 활성화\n`);
   });
 }

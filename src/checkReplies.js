@@ -51,10 +51,10 @@ async function checkRepliesForAccount(context, page, account) {
     const badges = await newTab.$$(selectors.chat.badge);
     replyCount = badges.length;
 
-    console.log(`${tag} [답장확인] 답장 ${replyCount}건`);
+    console.log(`${tag} [인포크 확인] 답장 ${replyCount}건`);
   } catch (e) {
     error = e.message;
-    console.error(`${tag} [답장확인 실패] ${e.message}`);
+    console.error(`${tag} [인포크 확인 실패] ${e.message}`);
   } finally {
     await newTab.close().catch(() => {});
   }
@@ -66,7 +66,7 @@ async function checkRepliesForAccount(context, page, account) {
 
 async function main() {
   console.log('========================================');
-  console.log('  답장 확인 매크로');
+  console.log('  인포크 확인 매크로');
   console.log('========================================');
 
   // [요청] accountsRepo 경유로 계정 로드
@@ -85,7 +85,7 @@ async function main() {
     }
   }
 
-  // [요청] 답장확인은 별도 크롬창 띄우지 않고 백그라운드(헤드리스)로 실행
+  // [요청] 인포크 확인은 별도 크롬창 띄우지 않고 백그라운드(헤드리스)로 실행
   const browser = await chromium.launch({
     headless: true,
     slowMo: config.SLOW_MO,
@@ -121,7 +121,7 @@ async function main() {
 
   // 결과 요약
   console.log('\n========================================');
-  console.log('  답장 확인 결과');
+  console.log('  인포크 확인 결과');
   console.log('========================================');
   let totalReplies = 0;
   for (const r of results) {
