@@ -36,6 +36,14 @@ N명에게서 답장 (M명 거절)
 
 
 [ 작업완료 ]
+## 자주 사용하는 문구 — 직원별 최대 3개 최상단 고정 (26.06.09)
+유틸리티 > 자주 사용하는 문구에서 직원별로 문구를 📌 최대 3개까지 최상단 고정. 고정분은 목록 맨 위에 노란 카드로 모이고, 4번째 고정은 서버가 막음(`PIN_LIMIT`→400).
+- **DB** [scripts/schema.sql](scripts/schema.sql): `phrases`에 `pinned boolean not null default false` 추가(create 정의 + 하단 `alter ... add column if not exists` 마이그레이션). ⚠️ 운영 Supabase는 이 ALTER 1줄 SQL Editor에서 1회 실행 필요.
+- **Repo** [src/repo/phrasesRepo.js](src/repo/phrasesRepo.js): `rowToPhrase`에 `pinned`, `list` 정렬 **pinned desc→sort_order→created_at**(JSON/Supabase 양쪽). 신규 `setPinned(id, pinned)` dual-mode 추가 — 켤 때만 해당 직원 고정수 `< PIN_LIMIT(3)` 검증(자기 제외), 초과 `PIN_LIMIT`, 미존재 `NOT_FOUND`. `module.exports`에 노출.
+- **Server** [server.js](server.js): `PUT /api/phrases/:id/pin`(body `{pinned}`) 신규 — 기존 `PUT /api/phrases/:id`(title/content 검증)와 분리해 핀 토글이 content 검증에 안 걸리게. `PIN_LIMIT`→400("최대 3개까지 고정"), `NOT_FOUND`→404.
+- **UI** [public/index.html](public/index.html): 카드에 📌고정/고정해제 버튼(`togglePin(id,pinned)`), 고정 카드 `.phrase-card.pinned`(노란 테두리)+📌배지, 상단 "고정 N/3" 카운트. 인라인 수정 카드엔 핀 버튼 미노출. CSS `.phrase-card.pinned`/`.phrase-pin-badge`/`.phrase-pin-count`/`.btn-pin-active` 신설.
+- `node --check server.js src/repo/phrasesRepo.js` 통과.
+
 ## Vercel 직원용 배포 — DB 접속/CRUD 가능하도록 (26.06.09)
 ngrok(`shimmy-defame-unifier.ngrok-free.dev`)는 매크로 운영용 그대로 두고, 직원용 `unx-company-gonggu.vercel.app`에서 기존 관리 UI의 DB CRUD가 동작하도록 Vercel을 서버리스로 구성. 두 배포가 같은 Supabase를 공유 → 데이터 동기화 불필요. 원인: Vercel엔 백엔드(`/api`)가 없어서 모든 CRUD 호출이 깨졌고(`adminPassword` 때문에 401), `.env`가 gitignore라 Supabase 키도 없었음.
 - [server.js](server.js): ① `authRequired`에 `if (process.env.VERCEL) return next()` — 서버리스에선 인증 스킵(직원 링크만으로 이용 + 무상태 세션 문제 회피). ② cron 2개(`0 9 * * *` 리드 리마인드 / `30 8,10,12,14,16` 답장확인)를 `if (!process.env.VERCEL){...}`로 감쌈 — 서버리스에서 cron·spawn 불가. ③ 하단 `module.exports = app` 추가하고 `app.listen`은 `if (!process.env.VERCEL)`일 때만 — @vercel/node가 Express app을 핸들러로 사용.

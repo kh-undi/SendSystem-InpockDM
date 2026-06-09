@@ -842,6 +842,19 @@ app.delete('/api/phrases/:id', async (req, res) => {
   }
 });
 
+// [요청] 직원별 최대 3개 최상단 고정 — 핀 토글 (content 검증과 무관하게 별도 엔드포인트로 분리).
+app.put('/api/phrases/:id/pin', async (req, res) => {
+  try {
+    const pinned = !!(req.body && req.body.pinned);
+    const phrase = await phrasesRepo.setPinned(req.params.id, pinned);
+    res.json({ ok: true, phrase });
+  } catch (e) {
+    if (e.code === 'PIN_LIMIT') return res.status(400).json({ error: '최대 3개까지 고정할 수 있습니다.' });
+    if (e.code === 'NOT_FOUND') return res.status(404).json({ error: '문구를 찾을 수 없습니다.' });
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // [요청] 리드 관리 탭 신설 — 매일 09:00 리마인드 due 콘솔/leadsLogs 기록.
 //   향후 텔레그램/이메일 푸시는 이 함수에서 1줄 추가만으로 붙일 수 있도록 분리해둠.
 async function checkLeadReminders() {

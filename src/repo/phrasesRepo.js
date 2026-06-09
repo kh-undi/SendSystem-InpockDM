@@ -15,9 +15,13 @@ function rowToPhrase(r) {
     title: r.title || '',
     content: r.content || '',
     sortOrder: r.sort_order || 0,
+    pinned: !!r.pinned, // [요청] 직원별 최대 3개 최상단 고정
     createdAt: r.created_at || null,
   };
 }
+
+// [요청] 직원별 최대 3개 최상단 고정 — 한 직원이 고정할 수 있는 최대 문구 수.
+const PIN_LIMIT = 3;
 
 function normalizeIncoming(payload) {
   return {
@@ -54,8 +58,10 @@ function jsonSave(phrases) {
 async function listJson(employeeId) {
   let list = jsonLoadRaw().phrases || [];
   if (employeeId) list = list.filter(p => Number(p.employee_id) === Number(employeeId));
+  // [요청] 고정(pinned) 우선 → sort_order → created_at 순.
   return list.slice()
-    .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0)
+    .sort((a, b) => (Number(!!b.pinned) - Number(!!a.pinned))
+      || (a.sort_order || 0) - (b.sort_order || 0)
       || (a.created_at || '').localeCompare(b.created_at || ''))
     .map(rowToPhrase);
 }
@@ -99,11 +105,32 @@ async function removeOneJson(id) {
   jsonSave(list);
 }
 
+// [요청] 직원별 최대 3개 최상단 고정 — 핀 토글. 켤 때만 직원당 3개 제한 검증.
+async function setPinnedJson(id, pinned) {
+  const raw = jsonLoadRaw();
+  const list = raw.phrases || [];
+  const numId = Number(id);
+  const idx = list.findIndex(r => r.id === numId);
+  if (idx === -1) { const e = new Error('NOT_FOUND'); e.code = 'NOT_FOUND'; throw e; }
+  const target = list[idx];
+  if (pinned) {
+    const pinnedCount = list.filter(r =>
+      Number(r.employee_id) === Number(target.employee_id) && r.pinned && r.id !== numId).length;
+    if (pinnedCount >= PIN_LIMIT) { const e = new Error('PIN_LIMIT'); e.code = 'PIN_LIMIT'; throw e; }
+  }
+  list[idx] = { ...target, pinned: !!pinned };
+  raw.phrases = list;
+  jsonSave(list);
+  return rowToPhrase(list[idx]);
+}
+
 // ─── Supabase 구현 ───
 async function listSupabase(employeeId) {
   let q = supabase.from('phrases').select('*');
   if (employeeId) q = q.eq('employee_id', Number(employeeId));
   const { data, error } = await q
+    // [요청] 고정(pinned) 우선 → sort_order → created_at 순.
+    .order('pinned', { ascending: false })
     .order('sort_order', { ascending: true })
     .order('created_at', { ascending: true });
   if (error) throw error;
@@ -138,6 +165,31 @@ async function removeOneSupabase(id) {
   if (error) throw error;
 }
 
+// [요청] 직원별 최대 3개 최상단 고정 — 핀 토글. 켤 때만 직원당 3개 제한 검증.
+async function setPinnedSupabase(id, pinned) {
+  // 대상 문구의 employee_id 조회 (제한 카운트 기준).
+  const { data: target, error: getErr } = await supabase
+    .from('phrases').select('id, employee_id').eq('id', Number(id)).single();
+  if (getErr) {
+    if (getErr.code === 'PGRST116') { const e = new Error('NOT_FOUND'); e.code = 'NOT_FOUND'; throw e; }
+    throw getErr;
+  }
+  if (pinned) {
+    const { count, error: cntErr } = await supabase
+      .from('phrases')
+      .select('id', { count: 'exact', head: true })
+      .eq('employee_id', target.employee_id)
+      .eq('pinned', true)
+      .neq('id', Number(id));
+    if (cntErr) throw cntErr;
+    if ((count || 0) >= PIN_LIMIT) { const e = new Error('PIN_LIMIT'); e.code = 'PIN_LIMIT'; throw e; }
+  }
+  const { data, error } = await supabase
+    .from('phrases').update({ pinned: !!pinned }).eq('id', Number(id)).select().single();
+  if (error) throw error;
+  return rowToPhrase(data);
+}
+
 // ─── 공용 API ───
 async function list(employeeId) {
   return config.USE_SUPABASE ? listSupabase(employeeId) : listJson(employeeId);
@@ -151,5 +203,9 @@ async function updateOne(id, payload) {
 async function removeOne(id) {
   return config.USE_SUPABASE ? removeOneSupabase(id) : removeOneJson(id);
 }
+// [요청] 직원별 최대 3개 최상단 고정
+async function setPinned(id, pinned) {
+  return config.USE_SUPABASE ? setPinnedSupabase(id, pinned) : setPinnedJson(id, pinned);
+}
 
-module.exports = { list, insertOne, updateOne, removeOne };
+module.exports = { list, insertOne, updateOne, removeOne, setPinned };

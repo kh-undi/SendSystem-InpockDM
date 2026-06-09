@@ -184,6 +184,14 @@
     .phrase-card .phrase-content { font-size:13px; color:#4b5563; white-space:pre-wrap; word-break:break-word; line-height:1.5; }
     .phrase-card .phrase-actions { display:flex; gap:6px; margin-top:10px; justify-content:flex-end; }
     .phrase-card.phrase-editing { border-color:#6366f1; background:#f5f6ff; }
+    /* [요청] 직원별 최대 3개 최상단 고정 — 우측 상단 📌 토글 아이콘(활성/비활성) + 고정 카드 강조 */
+    .phrase-card { position:relative; }
+    .phrase-card:not(.phrase-editing) { padding-right:38px; }
+    .phrase-card.pinned { border-color:#f59e0b; background:#fffbeb; }
+    .phrase-pin-toggle { position:absolute; top:8px; right:8px; width:27px; height:27px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:14px; line-height:1; opacity:0.3; transition:all .15s; user-select:none; }
+    .phrase-pin-toggle:hover { opacity:0.65; background:#f3f4f6; }
+    .phrase-pin-toggle.active { opacity:1; background:#fef3c7; box-shadow:0 0 0 1px #f59e0b inset; }
+    .phrase-pin-count { font-size:12px; color:#9ca3af; margin-bottom:10px; }
     .phrase-edit-title { width:100%; margin-bottom:8px; }
     .phrase-edit-content { width:100%; resize:vertical; min-height:60px; }
     .phrase-empty { text-align:center; padding:32px; color:#9ca3af; font-size:14px; }
@@ -2288,7 +2296,10 @@
         list.innerHTML = '<div class="phrase-empty">등록된 문구가 없습니다. 위에서 추가하세요.</div>';
         return;
       }
-      list.innerHTML = currentPhrases.map(p => {
+      // [요청] 직원별 최대 3개 최상단 고정 — 고정 카운트 안내 (currentPhrases는 서버에서 pinned 우선 정렬됨)
+      const pinnedCount = currentPhrases.filter(p => p.pinned).length;
+      const countHtml = `<div class="phrase-pin-count">📌 고정 ${pinnedCount}/3</div>`;
+      list.innerHTML = countHtml + currentPhrases.map(p => {
         // [요청] 수정은 alert(prompt) 대신 카드 내부 인라인 폼으로
         if (p.id === editingPhraseId) {
           return `
@@ -2301,8 +2312,10 @@
           </div>
         </div>`;
         }
+        // [요청] 직원별 최대 3개 최상단 고정 — 우측 상단 📌 토글 아이콘(활성=노란원/비활성=흐림)
         return `
-        <div class="phrase-card">
+        <div class="phrase-card${p.pinned ? ' pinned' : ''}">
+          <div class="phrase-pin-toggle${p.pinned ? ' active' : ''}" title="${p.pinned ? '고정 해제' : '고정'}" onclick="togglePin(${p.id}, ${p.pinned ? 'false' : 'true'})">📌</div>
           ${p.title ? `<div class="phrase-title">${escapeHtml(p.title)}</div>` : ''}
           <div class="phrase-content">${escapeHtml(p.content)}</div>
           <div class="phrase-actions">
@@ -2312,6 +2325,20 @@
           </div>
         </div>`;
       }).join('');
+    }
+
+    // [요청] 직원별 최대 3개 최상단 고정 — 핀 토글 (PIN_LIMIT 초과 시 서버가 400)
+    async function togglePin(id, pinned) {
+      try {
+        const res = await fetch('/api/phrases/' + id + '/pin', {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pinned })
+        });
+        const data = await res.json();
+        if (!res.ok) { alert(data.error || '고정 변경 실패'); return; }
+        loadPhrases(selectedEmployeeId);
+        showToast(pinned ? '문구를 고정했습니다' : '고정을 해제했습니다');
+      } catch (e) { alert('고정 변경 실패: ' + e.message); }
     }
 
     function copyPhrase(id) {

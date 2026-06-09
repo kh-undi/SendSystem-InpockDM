@@ -367,7 +367,12 @@ create table if not exists phrases (
   title        text,
   content      text        not null,
   sort_order   int         not null default 0,
+  -- [요청] 직원별 최대 3개 최상단 고정 — pinned 우선 정렬, 3개 제한은 앱(phrasesRepo.setPinned)에서 강제.
+  pinned       boolean     not null default false,
   created_at   timestamptz not null default now()
 );
 
 create index if not exists idx_phrases_employee on phrases(employee_id, sort_order);
+
+-- [요청] 직원별 문구 고정 — 기존 테이블용 마이그레이션 (이미 배포된 DB는 위 create가 no-op이라 1회 실행 필요).
+alter table phrases add column if not exists pinned boolean not null default false;
