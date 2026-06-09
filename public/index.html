@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="icon" type="image/x-icon" href="/favicon.ico">
-  <title>인포크링크 제안서 매크로</title>
+  <title>제품 관리 시스템</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: 'Segoe UI', -apple-system, sans-serif; background: #f0f2f5; color: #1a1a1a; }
@@ -174,6 +174,22 @@
     .catalogs-table .copy-btn { font-size:11px; padding:2px 8px; margin-left:4px; }
     .catalogs-empty { text-align:center; padding:40px; color:#9ca3af; font-size:14px; }
 
+    /* [요청] 자주 사용하는 문구 — 직원별 서브탭 + 문구 카드 */
+    .phrase-subtabs { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:16px; border-bottom:1px solid #e5e7eb; padding-bottom:12px; }
+    .phrase-subtab { padding:8px 18px; border:1px solid #e5e7eb; border-radius:20px; background:white; cursor:pointer; font-size:13px; font-weight:600; color:#6b7280; transition:all 0.15s; }
+    .phrase-subtab:hover { border-color:#6366f1; color:#6366f1; }
+    .phrase-subtab.active { background:#6366f1; border-color:#6366f1; color:white; }
+    .phrase-card { border:1px solid #e5e7eb; border-radius:8px; padding:12px 14px; margin-bottom:10px; background:#fafafa; }
+    .phrase-card .phrase-title { font-size:13px; font-weight:700; color:#374151; margin-bottom:4px; }
+    .phrase-card .phrase-content { font-size:13px; color:#4b5563; white-space:pre-wrap; word-break:break-word; line-height:1.5; }
+    .phrase-card .phrase-actions { display:flex; gap:6px; margin-top:10px; justify-content:flex-end; }
+    .phrase-card.phrase-editing { border-color:#6366f1; background:#f5f6ff; }
+    .phrase-edit-title { width:100%; margin-bottom:8px; }
+    .phrase-edit-content { width:100%; resize:vertical; min-height:60px; }
+    .phrase-empty { text-align:center; padding:32px; color:#9ca3af; font-size:14px; }
+    .employee-row { display:flex; align-items:center; gap:8px; padding:8px 0; border-bottom:1px solid #f3f4f6; }
+    .employee-row .emp-name { flex:1; font-size:14px; color:#374151; }
+
     /* 카탈로그 생성 모달 — 2패널 좌(전체)-우(선택됨) */
     .catalog-panels { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:8px; min-height:320px; max-height:50vh; }
     .catalog-panel { border:1px solid #e5e7eb; border-radius:8px; padding:10px; background:#fafafa; display:flex; flex-direction:column; }
@@ -209,7 +225,7 @@
 </head>
 <body>
   <div class="header">
-    <h1>인포크링크 제안서 매크로</h1>
+    <h1>제품 관리 시스템</h1>
     <div style="display:flex;gap:8px;align-items:center">
       <div class="status-badge" id="headerReplyBadge" style="display:none;background:rgba(99,102,241,0.9);cursor:pointer" onclick="goToRepliesTab()"></div>
       <div class="status-badge" id="headerStatus">준비</div>
@@ -228,7 +244,9 @@
     <!-- [요청] 리드 관리 탭 신설 — 답장 확인 우측 -->
     <div class="tab" data-panel="leads">리드 관리 <span class="leads-due-badge" id="leadsDueBadge" style="display:none">0</span></div>
     <!-- [요청] 추천 카탈로그 페이지 — 인플루언서별 큐레이션 공유 링크 -->
-    <div class="tab" data-panel="catalogs">📦 추천</div>
+    <div class="tab" data-panel="catalogs">제품추천생성</div>
+    <!-- [요청] 자주 사용하는 문구 — 직원별 추가/복사 탭 신설 -->
+    <div class="tab" data-panel="phrases">유틸리티</div>
     <!-- [요청] 인스타그램 URL → 평균 릴스 통계 조회 -->
     <div class="tab" data-panel="instagram">📊 인스타분석(미완성)</div>
   </div>
@@ -309,6 +327,20 @@
         </div>
         <div style="display:flex;gap:8px">
           <button class="btn btn-primary btn-sm" onclick="saveInstagramCreds()">저장</button>
+        </div>
+      </div>
+
+      <!-- [요청] 자주 사용하는 문구 — 직원별 추가/복사 탭 신설: 직원 관리 -->
+      <div class="card">
+        <div class="card-title">직원 관리</div>
+        <p style="font-size:12px;color:#6b7280;margin-bottom:12px">
+          여기에 직원을 추가하면 📝 문구 탭에 직원별 서브탭이 생기고, 각 직원이 자주 쓰는 문구를 등록·복사할 수 있습니다.<br>
+          ⚠ 직원을 삭제하면 그 직원의 문구도 모두 함께 삭제됩니다.
+        </p>
+        <div id="employeesBody" style="max-width:460px;margin-bottom:12px"></div>
+        <div style="display:flex;gap:8px;max-width:460px">
+          <input type="text" id="newEmployeeName" placeholder="직원 이름 (예: A, 홍길동)" style="flex:1" onkeydown="if(event.key==='Enter')addEmployee()">
+          <button class="btn btn-primary btn-sm" onclick="addEmployee()" style="white-space:nowrap">+ 직원 추가</button>
         </div>
       </div>
 
@@ -623,6 +655,18 @@
       </div>
     </div>
 
+    <!-- [요청] 자주 사용하는 문구 — 직원별 추가/복사 탭 신설 -->
+    <div class="panel" id="panel-phrases">
+      <div class="card">
+        <div class="card-title">자주 사용하는 문구</div>
+        <p style="font-size:13px;color:#6b7280;margin-bottom:12px">직원별로 자주 쓰는 문구를 등록해두고 📋 버튼으로 바로 복사하세요. 직원은 설정 → 직원 관리에서 추가합니다.</p>
+        <div class="phrase-subtabs" id="phraseSubtabs"></div>
+        <div id="phraseContent">
+          <!-- 직원 선택 시 추가 폼 + 목록이 렌더됨 -->
+        </div>
+      </div>
+    </div>
+
   </div>
 
   <script>
@@ -655,6 +699,14 @@
         // [요청] 추천 카탈로그 탭 진입 시 재로드
         if (tab.dataset.panel === 'catalogs') {
           loadCatalogs();
+        }
+        // [요청] 자주 사용하는 문구 탭 진입 시 직원 목록 + 문구 재로드
+        if (tab.dataset.panel === 'phrases') {
+          loadEmployees().then(renderPhraseTabs);
+        }
+        // [요청] 설정 탭 진입 시 직원 목록 재로드 (직원 관리 카드)
+        if (tab.dataset.panel === 'accounts') {
+          loadEmployees().then(renderEmployeesAdmin);
         }
       });
     });
@@ -696,6 +748,8 @@
       document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
       document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
       document.getElementById('panel-accounts').classList.add('active');
+      // [요청] 설정 진입 시 직원 관리 카드 렌더
+      loadEmployees().then(renderEmployeesAdmin);
     }
 
     // 페이지 로드 시 + 30초마다 배지 업데이트
@@ -2098,6 +2152,229 @@
         const btn = document.getElementById('logoutBtn');
         if (btn) btn.style.display = (s.needsAuth && s.authenticated) ? 'inline-block' : 'none';
       } catch {}
+    }
+
+    // ═══════════════════════════════════════
+    //  [요청] 자주 사용하는 문구 — 직원 관리 + 직원별 문구 추가/복사
+    // ═══════════════════════════════════════
+    let employees = [];          // [{id, name, sortOrder, createdAt}]
+    let selectedEmployeeId = null; // 문구 탭에서 현재 선택된 직원 id
+
+    async function loadEmployees() {
+      try {
+        const res = await fetch('/api/employees');
+        employees = await res.json();
+      } catch { employees = []; }
+      return employees;
+    }
+
+    function escapeHtml(s) {
+      return (s || '').replace(/[&<>"']/g, c =>
+        ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+
+    // ── 설정 > 직원 관리 카드 ──
+    function renderEmployeesAdmin() {
+      const box = document.getElementById('employeesBody');
+      if (!box) return;
+      if (!employees.length) {
+        box.innerHTML = '<p style="font-size:13px;color:#9ca3af;padding:8px 0">등록된 직원이 없습니다. 아래에서 추가하세요.</p>';
+        return;
+      }
+      box.innerHTML = employees.map(e => `
+        <div class="employee-row">
+          <span class="emp-name">${escapeHtml(e.name)}</span>
+          <button class="btn btn-outline btn-sm" onclick="renameEmployee(${e.id})">이름변경</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteEmployee(${e.id})">삭제</button>
+        </div>`).join('');
+    }
+
+    async function addEmployee() {
+      const input = document.getElementById('newEmployeeName');
+      const name = input.value.trim();
+      if (!name) { input.focus(); return; }
+      try {
+        const res = await fetch('/api/employees', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name })
+        });
+        const data = await res.json();
+        if (!res.ok) { alert(data.error || '추가 실패'); return; }
+        input.value = '';
+        await loadEmployees();
+        renderEmployeesAdmin();
+        showToast('직원 추가됨');
+      } catch (e) { alert('추가 실패: ' + e.message); }
+    }
+
+    async function renameEmployee(id) {
+      const emp = employees.find(e => e.id === id);
+      const name = prompt('새 이름', emp ? emp.name : '');
+      if (name === null) return;
+      if (!name.trim()) { alert('이름은 비울 수 없습니다.'); return; }
+      try {
+        const res = await fetch('/api/employees/' + id, {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: name.trim() })
+        });
+        const data = await res.json();
+        if (!res.ok) { alert(data.error || '변경 실패'); return; }
+        await loadEmployees();
+        renderEmployeesAdmin();
+        showToast('이름 변경됨');
+      } catch (e) { alert('변경 실패: ' + e.message); }
+    }
+
+    async function deleteEmployee(id) {
+      const emp = employees.find(e => e.id === id);
+      if (!confirm(`'${emp ? emp.name : ''}' 직원과 해당 직원의 모든 문구를 삭제합니다. 계속할까요?`)) return;
+      try {
+        const res = await fetch('/api/employees/' + id, { method: 'DELETE' });
+        if (!res.ok) { const d = await res.json(); alert(d.error || '삭제 실패'); return; }
+        if (selectedEmployeeId === id) selectedEmployeeId = null;
+        await loadEmployees();
+        renderEmployeesAdmin();
+        showToast('직원 삭제됨');
+      } catch (e) { alert('삭제 실패: ' + e.message); }
+    }
+
+    // ── 문구 탭: 직원 서브탭 ──
+    function renderPhraseTabs() {
+      const tabs = document.getElementById('phraseSubtabs');
+      const content = document.getElementById('phraseContent');
+      if (!employees.length) {
+        tabs.innerHTML = '';
+        content.innerHTML = '<div class="phrase-empty">먼저 설정 → 직원 관리에서 직원을 추가하세요.</div>';
+        return;
+      }
+      // 선택 직원이 없거나 삭제됐으면 첫 직원 선택
+      if (!employees.some(e => e.id === selectedEmployeeId)) {
+        selectedEmployeeId = employees[0].id;
+      }
+      tabs.innerHTML = employees.map(e =>
+        `<div class="phrase-subtab ${e.id === selectedEmployeeId ? 'active' : ''}" onclick="selectPhraseEmployee(${e.id})">${escapeHtml(e.name)}</div>`
+      ).join('');
+      loadPhrases(selectedEmployeeId);
+    }
+
+    function selectPhraseEmployee(id) {
+      selectedEmployeeId = id;
+      renderPhraseTabs();
+    }
+
+    let currentPhrases = []; // 현재 선택 직원의 문구 목록 (id로 복사/수정 참조 — onclick 이스케이프 회피)
+    let editingPhraseId = null; // [요청] 인라인 수정 중인 문구 id (alert 대신 카드 내 폼)
+
+    async function loadPhrases(employeeId) {
+      editingPhraseId = null; // 목록 재로드 시 인라인 수정 상태 해제
+      const content = document.getElementById('phraseContent');
+      try {
+        const res = await fetch('/api/phrases?employeeId=' + employeeId);
+        currentPhrases = await res.json();
+      } catch { currentPhrases = []; }
+      content.innerHTML = `
+        <div style="display:flex;gap:8px;margin-bottom:16px;align-items:flex-start">
+          <input type="text" id="newPhraseTitle" placeholder="제목 (선택)" style="width:200px">
+          <textarea id="newPhraseContent" placeholder="문구 내용" rows="4" style="flex:1;min-height:42px;resize:vertical"></textarea>
+          <button class="btn btn-primary btn-sm" onclick="addPhrase()" style="white-space:nowrap">+ 추가</button>
+        </div>
+        <div id="phraseList"></div>`;
+      renderPhrases();
+    }
+
+    function renderPhrases() {
+      const list = document.getElementById('phraseList');
+      if (!currentPhrases.length) {
+        list.innerHTML = '<div class="phrase-empty">등록된 문구가 없습니다. 위에서 추가하세요.</div>';
+        return;
+      }
+      list.innerHTML = currentPhrases.map(p => {
+        // [요청] 수정은 alert(prompt) 대신 카드 내부 인라인 폼으로
+        if (p.id === editingPhraseId) {
+          return `
+        <div class="phrase-card phrase-editing">
+          <input type="text" id="editPhraseTitle-${p.id}" class="phrase-edit-title" placeholder="제목 (선택)" value="${escapeHtml(p.title)}">
+          <textarea id="editPhraseContent-${p.id}" class="phrase-edit-content" rows="7">${escapeHtml(p.content)}</textarea>
+          <div class="phrase-actions">
+            <button class="btn btn-primary btn-sm" onclick="savePhraseEdit(${p.id})">저장</button>
+            <button class="btn btn-outline btn-sm" onclick="cancelPhraseEdit()">취소</button>
+          </div>
+        </div>`;
+        }
+        return `
+        <div class="phrase-card">
+          ${p.title ? `<div class="phrase-title">${escapeHtml(p.title)}</div>` : ''}
+          <div class="phrase-content">${escapeHtml(p.content)}</div>
+          <div class="phrase-actions">
+            <button class="btn btn-primary btn-sm" onclick="copyPhrase(${p.id})">📋 복사</button>
+            <button class="btn btn-outline btn-sm" onclick="editPhrase(${p.id})">수정</button>
+            <button class="btn btn-danger btn-sm" onclick="deletePhrase(${p.id})">삭제</button>
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    function copyPhrase(id) {
+      const p = currentPhrases.find(x => x.id === id);
+      if (p) copyText(p.content);
+    }
+
+    async function addPhrase() {
+      const title = document.getElementById('newPhraseTitle').value.trim();
+      const contentEl = document.getElementById('newPhraseContent');
+      const content = contentEl.value.trim();
+      if (!content) { contentEl.focus(); return; }
+      try {
+        const res = await fetch('/api/phrases', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ employeeId: selectedEmployeeId, title, content })
+        });
+        const data = await res.json();
+        if (!res.ok) { alert(data.error || '추가 실패'); return; }
+        loadPhrases(selectedEmployeeId);
+        showToast('문구 추가됨');
+      } catch (e) { alert('추가 실패: ' + e.message); }
+    }
+
+    // [요청] 인라인 수정 — 카드를 편집 폼으로 전환(목록 재요청 없이 렌더만)
+    function editPhrase(id) {
+      editingPhraseId = id;
+      renderPhrases();
+      const ta = document.getElementById('editPhraseContent-' + id);
+      if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
+    }
+
+    function cancelPhraseEdit() {
+      editingPhraseId = null;
+      renderPhrases();
+    }
+
+    async function savePhraseEdit(id) {
+      const title = document.getElementById('editPhraseTitle-' + id).value.trim();
+      const contentEl = document.getElementById('editPhraseContent-' + id);
+      const content = contentEl.value.trim();
+      if (!content) { contentEl.focus(); return; }
+      try {
+        const res = await fetch('/api/phrases/' + id, {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title, content })
+        });
+        const data = await res.json();
+        if (!res.ok) { alert(data.error || '수정 실패'); return; }
+        editingPhraseId = null;
+        loadPhrases(selectedEmployeeId);
+        showToast('문구 수정됨');
+      } catch (e) { alert('수정 실패: ' + e.message); }
+    }
+
+    async function deletePhrase(id) {
+      if (!confirm('이 문구를 삭제할까요?')) return;
+      try {
+        const res = await fetch('/api/phrases/' + id, { method: 'DELETE' });
+        if (!res.ok) { const d = await res.json(); alert(d.error || '삭제 실패'); return; }
+        loadPhrases(selectedEmployeeId);
+        showToast('문구 삭제됨');
+      } catch (e) { alert('삭제 실패: ' + e.message); }
     }
 
     // ═══════════════════════════════════════

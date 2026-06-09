@@ -348,3 +348,26 @@ alter table products add column if not exists suggest_existing_influencer text;
 
 -- [요청] 리드 관리 — 카톡전환 컬럼/체크박스 + 표에 메모란 노출
 alter table leads add column if not exists collaboration_converted boolean not null default false;
+
+-- [요청] 자주 사용하는 문구 — 직원별 추가/복사 탭 신설
+--   employees: 독립 범용 직원 테이블. 지금은 phrases가 참조하지만,
+--   향후 다른 테이블(발송 계정 담당자, 리드 담당자 등)에서도 employee_id로 재사용 예정.
+--   phrases: 직원별 자주 쓰는 문구(메모). employee 삭제 시 cascade로 함께 삭제.
+--   create table if not exists 라 정의 겸 마이그레이션(기존 DB는 이 블록만 SQL Editor 1회 실행).
+create table if not exists employees (
+  id          serial      primary key,
+  name        text        not null,
+  sort_order  int         not null default 0,
+  created_at  timestamptz not null default now()
+);
+
+create table if not exists phrases (
+  id           serial      primary key,
+  employee_id  int         not null references employees(id) on delete cascade,
+  title        text,
+  content      text        not null,
+  sort_order   int         not null default 0,
+  created_at   timestamptz not null default now()
+);
+
+create index if not exists idx_phrases_employee on phrases(employee_id, sort_order);

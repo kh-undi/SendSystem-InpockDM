@@ -6,6 +6,15 @@
 
 [ 요청사항 ]
 
+## 제안서 이미지 경로 정리 — Storage 단일 원본 + temp 캐시
+인포크 제안서 발송 시 Playwright `setInputFiles`에 넣는 이미지 경로 해석 로직([src/proposal.js](src/proposal.js))을 정리. 현재 `assets/` 폴더가 (1)레거시 (2)UI 업로드 임시저장 (3)제안서 발송 캐시 3역할을 겸해 "신뢰 원본"이 모호함.
+
+- **핵심 리스크**: [src/proposal.js:50-58](src/proposal.js#L50-L58) 빠른 경로가 **basename(파일명)만으로** `assets/` 매칭 → Storage에 새 이미지를 올렸는데 `assets/`에 같은 이름의 옛 파일이 남아 있으면 **오래된 이미지를 조용히 발송**(에러 없음 = 발견 어려움).
+- **방향(상의용, 구현 X)**:
+  - **추천안**: Supabase Storage = 단일 원본, 로컬은 순수 캐시. `assets/` basename 빠른 경로 제거 → 항상 Storage URL에서 `%TEMP%/inpock-photos/`로 받되, 캐시 키를 basename이 아니라 **URL 해시 또는 Storage ETag/last-modified**로 바꿔 내용이 다르면 재다운로드. `assets/`는 레거시+UI 업로드 스테이징 전용으로 축소.
+  - **최소수정안**: 빠른 경로 유지하되 basename 매칭 대신 Storage의 size/ETag와 비교(HEAD 1회) → 다르면 재다운로드.
+- 이메일 발송(nodemailer)은 URL 직접 첨부라 무영향. 어느 안이든 "옛 이미지 발송" 리스크 제거가 목표. 정식 진행 시 안 택일 후 요청.
+
 ## 제품 추천 시스템 — 관심 제품 기반 연관 추천
 인플루언서가 A 제품에 관심을 보이면 함께 제안할 만한 연관 제품을 추천. 현재 제품 ~50개 규모. 분류 방식·구현 방향 미정 상태이며, 후속 요청에서 구체화 예정.
 
@@ -27,6 +36,28 @@ N명에게서 답장 (M명 거절)
 
 
 [ 작업완료 ]
+## Vercel 직원용 배포 — DB 접속/CRUD 가능하도록 (26.06.09)
+ngrok(`shimmy-defame-unifier.ngrok-free.dev`)는 매크로 운영용 그대로 두고, 직원용 `unx-company-gonggu.vercel.app`에서 기존 관리 UI의 DB CRUD가 동작하도록 Vercel을 서버리스로 구성. 두 배포가 같은 Supabase를 공유 → 데이터 동기화 불필요. 원인: Vercel엔 백엔드(`/api`)가 없어서 모든 CRUD 호출이 깨졌고(`adminPassword` 때문에 401), `.env`가 gitignore라 Supabase 키도 없었음.
+- [server.js](server.js): ① `authRequired`에 `if (process.env.VERCEL) return next()` — 서버리스에선 인증 스킵(직원 링크만으로 이용 + 무상태 세션 문제 회피). ② cron 2개(`0 9 * * *` 리드 리마인드 / `30 8,10,12,14,16` 답장확인)를 `if (!process.env.VERCEL){...}`로 감쌈 — 서버리스에서 cron·spawn 불가. ③ 하단 `module.exports = app` 추가하고 `app.listen`은 `if (!process.env.VERCEL)`일 때만 — @vercel/node가 Express app을 핸들러로 사용.
+- [vercel.json](vercel.json) 신설(루트): `@vercel/node`로 server.js 빌드 + `routes` 전부 server.js로, `includeFiles`로 `public/**`·`settings.json` 번들(express.static·config가 fs로 읽으므로 필수). ※ `public/recommend/vercel.json`(별도 추천 카탈로그 프로젝트용)과 무관.
+- `node --check server.js` 통과.
+- **⚠️ 사용자 수동 작업 필수**: Vercel 프로젝트 → Settings → Environment Variables에 `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`(로컬 `.env` 값) 추가 후 **Redeploy**. 이게 없으면 db.js가 import 시 throw(500). `VERCEL`은 Vercel이 자동 주입(=1)이라 별도 설정 불필요.
+
+### 부족한 부분 (후속 작업 메모)
+1. **직원/운영자 권한 분리 없음** — Vercel에서 인증을 통째로 스킵해 매크로 발송·계정 등 모든 탭/API가 노출됨(매크로는 spawn 불가라 실동작은 안 하지만 UI엔 보이고, 데이터 수정 API는 열려 있음). → `index.html`에서 `location.hostname` 기반으로 직원 모드 분기(발송/계정/답장확인 탭 숨김) + 서버단에서 매크로 라우트 차단 필요.
+2. **이미지 업로드 불가** — multer가 `assets/` 디스크에 저장하는데 Vercel 파일시스템은 읽기전용/휘발성. 직원이 제품 사진 업로드 시 실패. → 업로드를 Supabase Storage 직행으로 변경하거나, 일단 직원 모드에서 업로드 버튼 숨김. (사용자: "이미지는 차차")
+3. **인증 없음 = 공개 노출** — URL 아는 사람 누구나 CRUD. 필요 시 공유 비번 1개(서명 쿠키) 또는 Supabase Auth 추가.
+4. **playwright 번들** — server.js가 instagramScraper를 top-level require → 서버리스 함수에 playwright가 포함돼 빌드가 무거움. 동작엔 무방하나, 빌드 크기 문제 시 instagramScraper를 lazy require로 전환.
+5. **assets 정적 서빙** — `includeFiles`에 `assets/**` 미포함(용량). 제품 사진은 DB에 Supabase public URL로 저장돼 직접 로드되므로 보통 무관하나, `/assets/...` 직접 참조가 있으면 404. 필요 시 추가.
+
+## 자주 사용하는 문구 — 직원별 추가/복사 탭 신설 (26.06.09)
+직원을 설정에서 추가하면 📝 문구 탭이 직원별 서브탭으로 나뉘고, 각 직원이 자주 쓰는 문구를 등록·복사. 저장은 Supabase(`employees`·`phrases` 2테이블, dual-mode JSON 폴백 포함). `employees`는 향후 다른 테이블에서도 `employee_id`로 참조할 독립 범용 테이블로 둠.
+- **스키마** [scripts/schema.sql](scripts/schema.sql): 파일 하단에 `employees`(id/name/sort_order/created_at) + `phrases`(id/employee_id FK on delete cascade/title/content/sort_order/created_at) + `idx_phrases_employee` 추가. `create table if not exists`라 정의 겸 마이그레이션. ⚠️ 운영 Supabase는 이 블록을 SQL Editor에서 1회 실행 필요. RLS 미적용(관리 UI 전용).
+- **Repo** [src/repo/employeesRepo.js](src/repo/employeesRepo.js)·[src/repo/phrasesRepo.js](src/repo/phrasesRepo.js) 신설 — catalogsRepo 패턴 dual-mode. `list/insertOne/updateOne/removeOne`. employeesRepo는 JSON 모드 삭제 시 해당 직원 phrases.json 항목도 정리(FK cascade 흉내). phrasesRepo `list(employeeId?)` 필터, validation `EMPLOYEE_REQUIRED`/`CONTENT_REQUIRED`, 수정 시 employee_id 불변. JSON 폴백 `employees.json`/`phrases.json`.
+- **Server** [server.js](server.js): 카탈로그 라우트 뒤에 `GET/POST /api/employees`, `PUT/DELETE /api/employees/:id`, `GET /api/phrases?employeeId=`, `POST /api/phrases`, `PUT/DELETE /api/phrases/:id` 추가. `NAME_REQUIRED`/`EMPLOYEE_REQUIRED`/`CONTENT_REQUIRED`→400, `NOT_FOUND`→404.
+- **UI** [public/index.html](public/index.html): 설정 패널에 "직원 관리" 카드(목록+이름변경/삭제+추가). 탭 바에 `📝 문구` 탭 + `#panel-phrases` 패널(직원 서브탭 `.phrase-subtab` + 추가 폼 + 문구 카드 `.phrase-card`, 항목별 📋복사/수정/삭제). 복사·수정은 `currentPhrases`에서 id로 조회(onclick 이스케이프 회피), 복사는 기존 `copyText()`→`showToast()` 재사용. 탭 전환/설정 진입 시 `loadEmployees()` 후 렌더. CSS `.phrase-subtabs`/`.phrase-card`/`.employee-row` 신설.
+- `node --check server.js src/repo/employeesRepo.js src/repo/phrasesRepo.js` 통과.
+
 ## 고아 크롬 프로세스 누적 차단 — 프로세스 트리 강제 종료 (26.06.04)
 컴퓨터가 종종 꺼지는 증상의 가장 유력한 원인. Windows에서 `child.kill('SIGTERM'/'SIGKILL')`은 TerminateProcess로 변환돼 spawn된 node 자식만 죽이고, 그 node가 띄운 Playwright chromium(chrome.exe) 손자들은 고아로 남는다. 강제 종료라 자식 스크립트의 `finally{ browser.close() }`([src/index.js:211](src/index.js#L211)·[src/checkReplies.js:116](src/checkReplies.js#L116))도 실행 안 됨. "발송/답장확인 중단" 누를 때마다, 또 서버 재시작 시마다 chrome.exe 트리가 고아로 쌓여 RAM/CPU 점유 → 프리징/발열 셧다운.
 - [server.js:465](server.js#L465) `killProcessTree(proc, signal)` 헬퍼 신설. win32면 `taskkill /pid <pid> /T(트리) /F(강제)`를 `stdio:'ignore'`로 spawn(실패 시 `proc.kill('SIGKILL')` 폴백), 그 외 OS는 기존처럼 `proc.kill(signal)`.

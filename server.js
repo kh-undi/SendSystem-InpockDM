@@ -37,6 +37,10 @@ app.use(session({
 }));
 
 function authRequired(req, res, next) {
+  // [요청] Vercel 직원용 배포 — 서버리스(process.env.VERCEL)에선 인증 스킵.
+  //   직원은 링크만으로 바로 이용. 세션이 무상태 환경에서 안 살아남는 문제도 회피.
+  //   ⚠️ Vercel URL을 아는 사람은 누구나 접근 가능(공개 인터넷). 권한 분리는 후속 작업(메모 참조).
+  if (process.env.VERCEL) return next();
   const password = readSettingsSrv().adminPassword;
   if (!password) return next();                     // 비번 미설정 → auth 비활성
   if (req.path === '/favicon.ico') return next();   // favicon은 인증 없이 허용 (로그인 페이지 탭 아이콘)
@@ -747,6 +751,89 @@ app.delete('/api/catalogs/:id', async (req, res) => {
   }
 });
 
+// ─── 직원 / 자주 사용하는 문구 API ───
+// [요청] 자주 사용하는 문구 — 직원별 추가/복사 탭 신설
+const employeesRepo = require('./src/repo/employeesRepo');
+const phrasesRepo = require('./src/repo/phrasesRepo');
+
+app.get('/api/employees', async (req, res) => {
+  try {
+    res.json(await employeesRepo.list());
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/employees', async (req, res) => {
+  try {
+    const created = await employeesRepo.insertOne(req.body);
+    res.json({ ok: true, employee: created });
+  } catch (e) {
+    if (e.code === 'NAME_REQUIRED') return res.status(400).json({ error: '직원 이름은 필수입니다.' });
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.put('/api/employees/:id', async (req, res) => {
+  try {
+    const updated = await employeesRepo.updateOne(req.params.id, req.body);
+    res.json({ ok: true, employee: updated });
+  } catch (e) {
+    if (e.code === 'NAME_REQUIRED') return res.status(400).json({ error: '직원 이름은 필수입니다.' });
+    if (e.code === 'NOT_FOUND') return res.status(404).json({ error: '직원을 찾을 수 없습니다.' });
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// 직원 삭제 시 해당 직원 문구도 함께 삭제됨(Supabase on delete cascade / JSON 모드는 repo가 정리).
+app.delete('/api/employees/:id', async (req, res) => {
+  try {
+    await employeesRepo.removeOne(req.params.id);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get('/api/phrases', async (req, res) => {
+  try {
+    res.json(await phrasesRepo.list(req.query.employeeId));
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/phrases', async (req, res) => {
+  try {
+    const created = await phrasesRepo.insertOne(req.body);
+    res.json({ ok: true, phrase: created });
+  } catch (e) {
+    if (e.code === 'EMPLOYEE_REQUIRED') return res.status(400).json({ error: '직원을 먼저 선택해야 합니다.' });
+    if (e.code === 'CONTENT_REQUIRED') return res.status(400).json({ error: '문구 내용은 필수입니다.' });
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.put('/api/phrases/:id', async (req, res) => {
+  try {
+    const updated = await phrasesRepo.updateOne(req.params.id, req.body);
+    res.json({ ok: true, phrase: updated });
+  } catch (e) {
+    if (e.code === 'CONTENT_REQUIRED') return res.status(400).json({ error: '문구 내용은 필수입니다.' });
+    if (e.code === 'NOT_FOUND') return res.status(404).json({ error: '문구를 찾을 수 없습니다.' });
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.delete('/api/phrases/:id', async (req, res) => {
+  try {
+    await phrasesRepo.removeOne(req.params.id);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // [요청] 리드 관리 탭 신설 — 매일 09:00 리마인드 due 콘솔/leadsLogs 기록.
 //   향후 텔레그램/이메일 푸시는 이 함수에서 1줄 추가만으로 붙일 수 있도록 분리해둠.
 async function checkLeadReminders() {
@@ -766,6 +853,9 @@ async function checkLeadReminders() {
   }
 }
 
+// [요청] Vercel 직원용 배포 — cron은 서버리스에서 동작하지 않으므로(인스턴스 휘발성)
+//   로컬/ngrok(매크로 운영 서버)에서만 등록. spawn 기반 답장확인도 Vercel에선 불가.
+if (!process.env.VERCEL) {
 cron.schedule('0 9 * * *', () => {
   console.log('[크론] 리드 리마인드 체크 시작');
   checkLeadReminders();
@@ -796,6 +886,7 @@ cron.schedule('30 8,10,12,14,16 * * 1-5', () => {
     replyProcess = null;
   });
 });
+} // [요청] Vercel 가드 끝 — cron 블록 (위 if (!process.env.VERCEL))
 
 // [요청] 고아 크롬 방지 — 서버 종료(Ctrl+C / 재시작) 시 실행 중이던 자식 트리 정리.
 //   서버가 죽으면 spawn된 매크로/답장확인 node와 그 chromium 손자들이 고아로 남으므로,
@@ -813,8 +904,13 @@ process.on('SIGINT', shutdownCleanup);
 process.on('SIGTERM', shutdownCleanup);
 
 // ─── 서버 시작 ───
-app.listen(PORT, () => {
-  console.log(`\n  인포크링크 매크로 관리 UI`);
-  console.log(`  http://localhost:${PORT}`);
-  console.log(`  [크론] 매일 일일 총 4번 자동 답장확인 활성화\n`);
-});
+// [요청] Vercel 직원용 배포 — 서버리스에선 app.listen 대신 Express app을 핸들러로 export.
+//   @vercel/node가 module.exports를 (req,res) 핸들러로 사용. 로컬/ngrok에선 기존대로 listen.
+module.exports = app;
+if (!process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`\n  인포크링크 매크로 관리 UI`);
+    console.log(`  http://localhost:${PORT}`);
+    console.log(`  [크론] 매일 일일 총 4번 자동 답장확인 활성화\n`);
+  });
+}
