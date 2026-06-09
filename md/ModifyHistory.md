@@ -40,6 +40,7 @@ N명에게서 답장 (M명 거절)
 ngrok(`shimmy-defame-unifier.ngrok-free.dev`)는 매크로 운영용 그대로 두고, 직원용 `unx-company-gonggu.vercel.app`에서 기존 관리 UI의 DB CRUD가 동작하도록 Vercel을 서버리스로 구성. 두 배포가 같은 Supabase를 공유 → 데이터 동기화 불필요. 원인: Vercel엔 백엔드(`/api`)가 없어서 모든 CRUD 호출이 깨졌고(`adminPassword` 때문에 401), `.env`가 gitignore라 Supabase 키도 없었음.
 - [server.js](server.js): ① `authRequired`에 `if (process.env.VERCEL) return next()` — 서버리스에선 인증 스킵(직원 링크만으로 이용 + 무상태 세션 문제 회피). ② cron 2개(`0 9 * * *` 리드 리마인드 / `30 8,10,12,14,16` 답장확인)를 `if (!process.env.VERCEL){...}`로 감쌈 — 서버리스에서 cron·spawn 불가. ③ 하단 `module.exports = app` 추가하고 `app.listen`은 `if (!process.env.VERCEL)`일 때만 — @vercel/node가 Express app을 핸들러로 사용.
 - [vercel.json](vercel.json) 신설(루트): `@vercel/node`로 server.js 빌드 + `routes` 전부 server.js로, `includeFiles`로 `public/**`·`settings.json` 번들(express.static·config가 fs로 읽으므로 필수). ※ `public/recommend/vercel.json`(별도 추천 카탈로그 프로젝트용)과 무관.
+- [server.js](server.js) instagramScraper **lazy require** 전환: top-level `require('./src/instagramScraper')`(→`require('playwright')`)가 서버리스 로드 시점에 playwright를 끌어와 `FUNCTION_INVOCATION_FAILED` 유발. `getInstagramScraper()` 헬퍼로 호출 시점에만 require. ngrok/로컬은 호출 시 정상 로드(require 캐싱) → 동작 동일, 무영향. (checkReplies/index.js의 playwright는 spawn이라 함수 번들과 무관.)
 - `node --check server.js` 통과.
 - **⚠️ 사용자 수동 작업 필수**: Vercel 프로젝트 → Settings → Environment Variables에 `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`(로컬 `.env` 값) 추가 후 **Redeploy**. 이게 없으면 db.js가 import 시 throw(500). `VERCEL`은 Vercel이 자동 주입(=1)이라 별도 설정 불필요.
 

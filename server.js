@@ -429,12 +429,20 @@ app.post('/api/influencers/:id/resolve', async (req, res) => {
 
 // ─── 인스타그램 릴스 통계 API ───
 // [요청] 인스타그램 URL → 평균 릴스 통계 조회 (부가기능)
-const instagramScraper = require('./src/instagramScraper');
+// [요청] Vercel 직원용 배포 — instagramScraper가 top-level로 require('playwright')를 하므로,
+//   여기서 top-level require하면 서버리스 함수가 로드되는 순간 playwright를 끌어와 크래시(FUNCTION_INVOCATION_FAILED).
+//   직원 CRUD엔 인스타 기능이 필요 없으니, 실제 호출 시점에만 lazy require한다.
+//   ngrok/로컬: 호출 시 정상 로드(require 캐싱)되어 동작 동일. Vercel: 호출 안 하면 playwright 미로딩.
+let _instagramScraper = null;
+function getInstagramScraper() {
+  if (!_instagramScraper) _instagramScraper = require('./src/instagramScraper');
+  return _instagramScraper;
+}
 
 app.post('/api/instagram/analyze', (req, res) => {
   try {
     const { profileUrl, mode } = req.body || {};
-    const job = instagramScraper.startAnalysis({ profileUrl, mode, count: 20 });
+    const job = getInstagramScraper().startAnalysis({ profileUrl, mode, count: 20 });
     res.json({ ok: true, job });
   } catch (e) {
     if (e.code === 'ALREADY_RUNNING') return res.status(409).json({ error: e.message });
@@ -443,7 +451,7 @@ app.post('/api/instagram/analyze', (req, res) => {
 });
 
 app.get('/api/instagram/status', (req, res) => {
-  res.json(instagramScraper.getStatus() || { status: 'idle' });
+  res.json(getInstagramScraper().getStatus() || { status: 'idle' });
 });
 
 // ─── 매크로 실행 API ───
