@@ -246,6 +246,10 @@ function validateProductBody(body) {
       return `'${label}' 항목이 비어있습니다.`;
     }
   }
+  // [요청] 제조사 관리 — 제품 저장 시 제조사 필수
+  if (body?.manufacturerId == null || body.manufacturerId === '') {
+    return '제조사를 선택해주세요. (제조사 추가 → 제품 추가 순서)';
+  }
   return null;
 }
 
@@ -291,18 +295,24 @@ app.delete('/api/products/:id', async (req, res) => {
   }
 });
 
-// [요청] 빠른 제품 추가 — 브랜드명/제품명만으로 단건 insert. 관리명=제품명.
+// [요청] 빠른 제품 추가 — 제조사/제품명만으로 단건 insert. 관리명=제품명.
+// [요청] 제조사 관리 — 빠른추가도 제조사 필수. brandName은 선택한 제조사명을 UI가 채워 보냄.
 app.post('/api/products/quick', async (req, res) => {
   try {
     const brandName = String(req.body?.brandName || '').trim();
     const productName = String(req.body?.productName || '').trim();
-    if (!brandName || !productName) {
-      return res.status(400).json({ error: '브랜드명과 제품명은 필수입니다.' });
+    const manufacturerId = req.body?.manufacturerId;
+    if (!productName) {
+      return res.status(400).json({ error: '제품명은 필수입니다.' });
+    }
+    if (manufacturerId == null || manufacturerId === '') {
+      return res.status(400).json({ error: '제조사를 선택해주세요.' });
     }
     const created = await productsRepo.insertOne({
       name: productName,
       brandName,
       productName,
+      manufacturerId,
       campaignType: '공동구매',
       category: '육아·키즈',
       hookingPhrases: [],
@@ -312,6 +322,64 @@ app.post('/api/products/quick', async (req, res) => {
     if (e.code === 'DUPLICATE_NAME') {
       return res.status(409).json({ error: '이미 같은 관리명의 제품이 존재합니다.' });
     }
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ─── 제조사 API ───
+// [요청] 제조사 관리 기능 — 제조사 추가 → 제품 추가 흐름
+const manufacturersRepo = require('./src/repo/manufacturersRepo');
+
+app.get('/api/manufacturers', async (req, res) => {
+  try {
+    res.json(await manufacturersRepo.list());
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/manufacturers', async (req, res) => {
+  try {
+    const created = await manufacturersRepo.insertOne(req.body);
+    res.json({ ok: true, manufacturer: created });
+  } catch (e) {
+    if (e.code === 'NAME_REQUIRED') return res.status(400).json({ error: '제조사명은 필수입니다.' });
+    if (e.code === 'DUPLICATE_NAME') return res.status(409).json({ error: '이미 같은 이름의 제조사가 존재합니다.' });
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.put('/api/manufacturers/:id', async (req, res) => {
+  try {
+    const updated = await manufacturersRepo.updateOne(req.params.id, req.body);
+    res.json({ ok: true, manufacturer: updated });
+  } catch (e) {
+    if (e.code === 'NAME_REQUIRED') return res.status(400).json({ error: '제조사명은 필수입니다.' });
+    if (e.code === 'DUPLICATE_NAME') return res.status(409).json({ error: '이미 같은 이름의 제조사가 존재합니다.' });
+    if (e.code === 'NOT_FOUND') return res.status(404).json({ error: '제조사를 찾을 수 없습니다.' });
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// [요청] 제조사 협업종료 — status 토글. '협업종료'면 연결된 제품 status도 함께 협업종료(repo가 캐스케이드).
+app.put('/api/manufacturers/:id/status', async (req, res) => {
+  try {
+    const status = String(req.body?.status || '');
+    const m = (status === manufacturersRepo.STATUS_ENDED)
+      ? await manufacturersRepo.endCollaboration(req.params.id)
+      : await manufacturersRepo.reopen(req.params.id);
+    res.json({ ok: true, manufacturer: m });
+  } catch (e) {
+    if (e.code === 'NOT_FOUND') return res.status(404).json({ error: '제조사를 찾을 수 없습니다.' });
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.delete('/api/manufacturers/:id', async (req, res) => {
+  try {
+    await manufacturersRepo.removeOne(req.params.id);
+    res.json({ ok: true });
+  } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });

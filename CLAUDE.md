@@ -44,7 +44,7 @@ UI에서 "발송 시작"을 누르면 [server.js](server.js)가 `node src/index.
 
 ### Repo 레이어 / DB 모드
 
-모든 데이터 I/O는 [src/repo/](src/repo/) 아래 7개 repo를 경유한다 (`accountsRepo`, `productsRepo`, `influencersRepo`, `emailAccountsRepo`, `sentLogRepo`, `repliesRepo`).
+모든 데이터 I/O는 [src/repo/](src/repo/) 아래 repo를 경유한다 (`accountsRepo`, `productsRepo`, `manufacturersRepo`, `influencersRepo`, `emailAccountsRepo`, `sentLogRepo`, `repliesRepo`, `leadsRepo`, `catalogsRepo`, `employeesRepo`, `phrasesRepo`).
 
 - **기본 모드: Supabase** — Postgres + Storage. 설정은 [.env](.env)의 `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`.
 - **롤백 모드: JSON** — `USE_SUPABASE=false` 환경변수로 기존 JSON 파일 I/O 복귀. 각 repo가 `config.USE_SUPABASE` 플래그로 내부 분기.
@@ -96,10 +96,11 @@ UI에서 "발송 시작"을 누르면 [server.js](server.js)가 `node src/index.
 
 ### Supabase (기본)
 
-[scripts/schema.sql](scripts/schema.sql)이 전체 DDL. 11개 테이블:
+[scripts/schema.sql](scripts/schema.sql)이 전체 DDL. 12개 테이블:
 - `accounts` + `weekly_tracking` (발송 계정 / 주간 카운터)
 - `email_accounts` (Gmail 계정·서명)
-- `products` + `product_photos` (제품·사진 URL)
+- `manufacturers` (제조사 마스터 — name/contact_person/contact/hurdle/schedule/memo/status). products가 `manufacturer_id`로 참조. `status`: 빈값=진행 / `협업종료`(협업종료 시 연결 제품 status도 함께 변경)
+- `products` + `product_photos` (제품·사진 URL). `manufacturer_id`(제조사 FK, on delete set null) + `status`(빈값=진행 / `협업종료`) 보유
 - `influencers` (발송 큐 + 실패 기록 통합, `status=pending|sent|failed|skipped|sending`)
 - `sent_log` (append-only 감사 로그)
 - `reply_runs` + `replies` (인포크 확인)
@@ -125,7 +126,8 @@ UI에서 "발송 시작"을 누르면 [server.js](server.js)가 `node src/index.
 `USE_SUPABASE=false`일 때만 사용. 스키마는 DB와 동일한 의미:
 - `accounts.json`: `{id, username, password, weeklyTracking: {"YYYY-Www": n}}`
 - `emailAccounts.json`: `{id, email, appPassword, senderName, signature, signatureImage}`
-- `products.json`: `{products: [{name, brandName, productName, campaignType, category, usp, offerMessage, photos[], mailSubject?}]}`
+- `products.json`: `{products: [{name, brandName, productName, campaignType, category, usp, offerMessage, photos[], mailSubject?, manufacturerId?, status?}]}` (`manufacturerId`=제조사 연결, `status`=빈값/`협업종료`)
+- `manufacturers.json`: `{manufacturers: [{id, name, contactPerson, contact, hurdle, schedule, memo, status, createdAt}]}` (`status`=빈값/`협업종료`)
 - `influencers.json` / `failed.json`: `{nickname, profileUrl, productName, [error]}`
 - `replies.json`: `{checkedAt, partial, results[]}`
 - `leads.json`: `{leads: [{id, nickname, profileUrl, interestedProductName, suitableProductNote, repliedAt, proposalSentAt, remindAt, finalStatus, notes, ...}]}`

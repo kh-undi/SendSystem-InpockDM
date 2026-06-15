@@ -206,6 +206,14 @@
     .employee-row { display:flex; align-items:center; gap:8px; padding:8px 0; border-bottom:1px solid #f3f4f6; }
     .employee-row .emp-name { flex:1; font-size:14px; color:#374151; }
 
+    /* [요청] 제조사 관리 — 제조사 목록 행 / 협업종료 표시 */
+    .manufacturer-row { display:flex; align-items:center; gap:8px; padding:12px 0; border-bottom:1px solid #f3f4f6; }
+    .manufacturer-row.ended { opacity:0.5; }
+    .manufacturer-form { background:#f9fafb; border:1px solid #e5e7eb; border-radius:8px; padding:16px; margin-bottom:16px; }
+    .mfr-ended-badge { background:#9ca3af; color:#fff; font-size:11px; padding:1px 7px; border-radius:6px; }
+    .product-card.ended { opacity:0.5; }
+    .product-ended-badge { background:#9ca3af; color:#fff; font-size:11px; padding:1px 7px; border-radius:6px; margin-left:6px; }
+
     /* 카탈로그 생성 모달 — 2패널 좌(전체)-우(선택됨) */
     .catalog-panels { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:8px; min-height:320px; max-height:50vh; }
     .catalog-panel { border:1px solid #e5e7eb; border-radius:8px; padding:10px; background:#fafafa; display:flex; flex-direction:column; }
@@ -253,7 +261,8 @@
   </div>
 
   <div class="tabs">
-    <div class="tab active" data-panel="products">제품 관리</div>
+    <!-- [요청] 제조사 관리 — 제품 관리 1depth 아래 2depth(제품 목록 / 제조사 목록) -->
+    <div class="tab active" data-group="products">제품 관리</div>
     <!-- [요청] 탭 2depth — '인포크/메일 제안' 하위에 인플루언서/실행/인포크 확인 묶음 -->
     <div class="tab" data-group="inpock">인포크/메일 제안</div>
     <!-- [요청] 리드 관리 탭 신설 — 인포크/메일 제안 우측 -->
@@ -266,8 +275,14 @@
     <div class="tab" data-panel="instagram">📊 인스타분석(미완성)</div>
   </div>
 
+  <!-- [요청] 제조사 관리 — '제품 관리' 하위 서브탭 바 (제품 목록 / 제조사 목록). 초기 활성 탭이라 기본 노출. -->
+  <div class="subtabs" id="subtabs-products" data-group="products" style="display:flex">
+    <div class="subtab active" data-panel="products">제품 목록</div>
+    <div class="subtab" data-panel="manufacturers">제조사 목록</div>
+  </div>
+
   <!-- [요청] 탭 2depth — '인포크/메일 제안' 하위 서브탭 바 (상위 탭 활성 시에만 노출) -->
-  <div class="subtabs" id="subtabs-inpock" style="display:none">
+  <div class="subtabs" id="subtabs-inpock" data-group="inpock" style="display:none">
     <div class="subtab" data-panel="influencers">인플루언서</div>
     <div class="subtab" data-panel="run">인포크/메일 발송</div>
     <!-- [요청] '답장 확인' → '인포크 확인' 개명 (내부 식별자 replies는 유지) -->
@@ -415,12 +430,32 @@
           <div style="display:flex;gap:8px;align-items:center">
             <!-- [요청] 제품 검색 -->
             <input type="search" id="productSearch" placeholder="검색 (관리명·브랜드·제품명·카테고리·캠페인)" oninput="onProductSearchChange()" style="width:320px;padding:6px 12px;font-size:13px">
+            <!-- [요청] 제조사 관리 — 협업종료 제품 표시 토글 -->
+            <label style="font-size:12px;color:#6b7280;display:flex;align-items:center;gap:4px;white-space:nowrap"><input type="checkbox" id="showEndedProducts" onchange="onShowEndedProductsChange()"> 협업종료 포함</label>
             <!-- [요청] 빠른 제품 추가 -->
             <button class="btn btn-outline btn-sm" onclick="openQuickProductModal()">⚡ 빠른 추가</button>
             <button class="btn btn-outline btn-sm" onclick="addProduct()">+ 제품 추가</button>
           </div>
         </div>
         <div id="productsList"></div>
+      </div>
+    </div>
+
+    <!-- ═══ 제조사 관리 (제품 관리 2depth) ═══ -->
+    <!-- [요청] 제조사 관리 기능 — 제조사 추가 → 제품 추가 흐름 -->
+    <div class="panel" id="panel-manufacturers">
+      <div class="card">
+        <div class="actions-bar">
+          <div class="card-title">제조사 목록 <span class="count" id="manufacturerCount">0</span></div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <input type="search" id="manufacturerSearch" placeholder="제조사 검색 (이름·담당자·연락처)" oninput="renderManufacturers()" style="width:260px;padding:6px 12px;font-size:13px">
+            <label style="font-size:12px;color:#6b7280;display:flex;align-items:center;gap:4px;white-space:nowrap"><input type="checkbox" id="showEndedManufacturers" onchange="renderManufacturers()"> 협업종료 포함</label>
+            <button class="btn btn-primary btn-sm" onclick="openManufacturerForm()">+ 제조사 추가</button>
+          </div>
+        </div>
+        <div style="font-size:13px;color:#6b7280;margin-bottom:12px">제조사를 먼저 등록하면 제품 추가 시 선택만으로 브랜드명·허들·일정·메모가 채워집니다.</div>
+        <div id="manufacturerFormBox" style="display:none"></div>
+        <div id="manufacturersList"></div>
       </div>
     </div>
 
@@ -700,6 +735,9 @@
     let emailAccounts = [];
     let products = [];
     let influencers = [];
+    // [요청] 제조사 관리 — 제조사 목록 + 협업종료 제품 표시 토글
+    let manufacturers = [];
+    let showEndedProducts = false;
 
     // ═══════════════════════════════════════
     //  탭 전환
@@ -719,40 +757,62 @@
       if (panel === 'phrases') loadEmployees().then(renderPhraseTabs);
       // [요청] 설정 탭 진입 시 직원 목록 재로드 (직원 관리 카드)
       if (panel === 'accounts') loadEmployees().then(renderEmployeesAdmin);
+      // [요청] 제조사 관리 — 제품 목록 진입 시 제조사도 최신화(콤보박스 옵션), 제조사 목록 진입 시 렌더
+      if (panel === 'products') loadManufacturers().then(renderProducts);
+      if (panel === 'manufacturers') loadManufacturers().then(renderManufacturers);
     }
 
-    // [요청] 탭 2depth — '인포크/메일 제안' 하위 서브탭 활성화 (panel 미지정 시 기본 인플루언서)
-    function activateInpockSub(panel) {
-      const target = panel || 'influencers';
+    // [요청] 탭 2depth — 그룹별 서브탭 설정 (제품 관리 / 인포크·메일 제안)
+    const SUBGROUPS = {
+      products: { bar: 'subtabs-products', default: 'products' },
+      inpock:   { bar: 'subtabs-inpock',   default: 'influencers' },
+    };
+    function hideAllSubtabBars() {
+      Object.values(SUBGROUPS).forEach(c => {
+        const b = document.getElementById(c.bar);
+        if (b) b.style.display = 'none';
+      });
+    }
+    function activateSub(group, panel) {
+      const cfg = SUBGROUPS[group];
+      if (!cfg) return;
+      const target = panel || cfg.default;
       document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
       document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-      document.querySelector('.tab[data-group="inpock"]').classList.add('active');
-      document.getElementById('subtabs-inpock').style.display = 'flex';
-      document.querySelectorAll('.subtab').forEach(s => s.classList.toggle('active', s.dataset.panel === target));
+      hideAllSubtabBars();
+      document.querySelector(`.tab[data-group="${group}"]`).classList.add('active');
+      const bar = document.getElementById(cfg.bar);
+      bar.style.display = 'flex';
+      bar.querySelectorAll('.subtab').forEach(s => s.classList.toggle('active', s.dataset.panel === target));
       document.getElementById('panel-' + target).classList.add('active');
       onPanelEnter(target);
     }
+    // 하위호환 — 기존 호출부(goToRepliesTab 등)
+    function activateInpockSub(panel) { activateSub('inpock', panel); }
 
     // 1depth 탭
     document.querySelectorAll('.tab').forEach(tab => {
       tab.addEventListener('click', () => {
-        // [요청] 그룹 탭(인포크/메일 제안)은 서브탭 바를 열고 기본 서브패널 활성
-        if (tab.dataset.group === 'inpock') {
-          activateInpockSub();
+        // [요청] 그룹 탭(제품 관리 / 인포크·메일 제안)은 서브탭 바를 열고 기본 서브패널 활성
+        if (tab.dataset.group) {
+          activateSub(tab.dataset.group);
           return;
         }
         document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
         document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-        document.getElementById('subtabs-inpock').style.display = 'none';
+        hideAllSubtabBars();
         tab.classList.add('active');
         document.getElementById('panel-' + tab.dataset.panel).classList.add('active');
         onPanelEnter(tab.dataset.panel);
       });
     });
 
-    // [요청] 탭 2depth — 2depth 서브탭
+    // [요청] 탭 2depth — 2depth 서브탭 (각 바의 data-group으로 그룹 판별)
     document.querySelectorAll('.subtab').forEach(sub => {
-      sub.addEventListener('click', () => activateInpockSub(sub.dataset.panel));
+      sub.addEventListener('click', () => {
+        const group = sub.closest('.subtabs')?.dataset.group;
+        if (group) activateSub(group, sub.dataset.panel);
+      });
     });
 
     // ═══════════════════════════════════════
@@ -791,8 +851,8 @@
     function goToSettings() {
       document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
       document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-      // [요청] 탭 2depth — 설정 진입 시 서브탭 바 숨김
-      document.getElementById('subtabs-inpock').style.display = 'none';
+      // [요청] 탭 2depth — 설정 진입 시 서브탭 바 모두 숨김
+      hideAllSubtabBars();
       document.getElementById('panel-accounts').classList.add('active');
       // [요청] 설정 진입 시 직원 관리 카드 렌더
       loadEmployees().then(renderEmployeesAdmin);
@@ -1096,12 +1156,14 @@
 
     function renderProducts() {
       const container = document.getElementById('productsList');
+      // [요청] 제조사 관리 — 협업종료 제품은 기본 숨김(토글 시 노출). 표시 대상 전체 카운트의 분모로 사용.
+      const visibleProducts = products.filter(p => showEndedProducts || p.status !== '협업종료');
       // [요청] 제품 검색 — 매칭 인덱스만 추출, 카운트는 매칭/전체
       const matchedIndices = products
-        .map((p, i) => productMatchesSearch(p) ? i : -1)
+        .map((p, i) => ((showEndedProducts || p.status !== '협업종료') && productMatchesSearch(p)) ? i : -1)
         .filter(i => i >= 0);
       document.getElementById('productCount').textContent =
-        productSearchQuery ? `${matchedIndices.length}/${products.length}` : products.length;
+        productSearchQuery ? `${matchedIndices.length}/${visibleProducts.length}` : visibleProducts.length;
       if (matchedIndices.length === 0 && products.length > 0) {
         container.innerHTML = `<div style="text-align:center;color:#9ca3af;padding:32px;font-size:14px">검색 결과 없음</div>`;
         return;
@@ -1114,8 +1176,9 @@
         const noPhoto = !(p.photos && p.photos.length > 0);
         const needsAttention = isQuick || noPhoto;
         const isDirty = dirtyProducts.has(p); // [요청] 카드 단위 저장
+        const isEnded = p.status === '협업종료'; // [요청] 제조사 관리 — 협업종료 제품
         return `
-        <div class="product-card ${needsAttention ? 'needs-attention' : ''} ${isOpen ? 'editing' : ''} ${isDirty ? 'dirty' : ''}" id="product-${i}">
+        <div class="product-card ${needsAttention ? 'needs-attention' : ''} ${isOpen ? 'editing' : ''} ${isDirty ? 'dirty' : ''} ${isEnded ? 'ended' : ''}" id="product-${i}">
           ${(isQuick || noPhoto) ? `<div class="card-badges">
             ${isQuick ? '<span class="card-badge badge-quick">빠른추가</span>' : ''}
             ${noPhoto ? '<span class="card-badge badge-no-photo">이미지 없음</span>' : ''}
@@ -1124,6 +1187,7 @@
             <div style="display:flex;align-items:center;gap:10px">
               <span style="font-size:14px;color:#6b7280;transition:transform 0.2s;display:inline-block;transform:rotate(${isOpen?'90':'0'}deg)">&gt;</span>
               <span class="product-name">${esc(p.name) || '새 제품'}</span>
+              ${isEnded ? '<span class="product-ended-badge">협업종료</span>' : ''}
               <span style="font-size:12px;color:#9ca3af">${esc(p.brandName)} · ${esc(p.productName)} · ${esc(p.campaignType)} · ${esc(p.category)}</span>
             </div>
           </div>
@@ -1131,6 +1195,8 @@
             <div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:12px;align-items:center">
               <!-- [요청] 미저장 표시 -->
               <span class="dirty-indicator">● 미저장</span>
+              <!-- [요청] 제조사 관리 — 제품 협업종료/복귀 토글 -->
+              <button class="btn btn-outline btn-sm" onclick="event.stopPropagation();toggleProductStatus(${i})">${isEnded ? '진행으로 복귀' : '협업종료'}</button>
               <button class="btn btn-primary btn-sm" onclick="event.stopPropagation();saveOneProduct(${i})">저장</button>
               <button class="btn btn-danger btn-sm" onclick="event.stopPropagation();removeProduct(${i})">삭제</button>
             </div>
@@ -1145,13 +1211,27 @@
                 <input type="text" value="${esc(p.mailSubject || '')}" onchange="products[${i}].mailSubject=this.value" onclick="event.stopPropagation()" placeholder="비우면 '[언엑스 공동구매] ${esc(p.name)} 공동구매 제안 건'으로 발송">
               </div>
               <hr style="grid-column:1/-1;border:none;border-top:1px solid #e5e7eb;width:50%;margin:3px auto">
+              <!-- [요청] 제조사 관리 — 브랜드명 직접입력 → 제조사 검색 콤보박스(선택 시 브랜드명 자동) -->
               <div class="form-group">
-                <label><span style="color:#ef4444;margin-right:2px">*</span>브랜드명</label>
-                <input type="text" value="${esc(p.brandName)}" onchange="products[${i}].brandName=this.value;updateProductHeader(${i})" onclick="event.stopPropagation()">
+                <label><span style="color:#ef4444;margin-right:2px">*</span>제조사</label>
+                <input type="text" placeholder="제조사 검색..." oninput="filterManufacturerSelect(${i}, this.value)" onclick="event.stopPropagation()" style="margin-bottom:6px">
+                <select id="mfrSelect-${i}" onchange="selectManufacturer(${i}, this.value)" onclick="event.stopPropagation()">
+                  ${manufacturerOptionsHtml(p.manufacturerId)}
+                </select>
+                <div style="font-size:12px;color:#9ca3af;margin-top:4px">브랜드명: ${esc(p.brandName) || '(제조사 선택 시 자동 채움)'}</div>
               </div>
               <div class="form-group">
                 <label><span style="color:#ef4444;margin-right:2px">*</span>제품명</label>
                 <input type="text" value="${esc(p.productName)}" onchange="products[${i}].productName=this.value;updateProductHeader(${i})" onclick="event.stopPropagation()">
+              </div>
+              <!-- [요청] 제품 상세에 제조사 메모 표시 — 연결 제조사의 memo를 읽기전용으로(편집은 '제조사 목록' 탭). 제조사-제품명-제조사 메모-카테고리-캠페인 유형 순. -->
+              <div class="form-group" style="grid-column:1/-1">
+                <label>제조사 메모 <span style="font-size:12px;color:#9ca3af">(제조사 목록에서 편집)</span></label>
+                ${(() => {
+                  const mm = manufacturers.find(x => x.id === p.manufacturerId);
+                  const memo = mm && mm.memo ? mm.memo : '';
+                  return `<textarea rows="2" readonly onclick="event.stopPropagation()" style="background:#f9fafb;color:#6b7280;cursor:default" placeholder="${mm ? '제조사 메모 없음' : '제조사 선택 시 표시'}">${esc(memo)}</textarea>`;
+                })()}
               </div>
               <div class="form-group">
                 <label><span style="color:#ef4444;margin-right:2px">*</span>카테고리</label>
@@ -1268,23 +1348,34 @@
     }
 
     // [요청] 빠른 제품 추가
-    function openQuickProductModal() {
-      document.getElementById('quickProductBrand').value = '';
+    // [요청] 제조사 관리 — 빠른추가도 제조사 콤보박스(필수)로
+    async function openQuickProductModal() {
       document.getElementById('quickProductName').value = '';
+      await loadManufacturers();
+      const search = document.getElementById('quickMfrSearch');
+      if (search) search.value = '';
+      filterQuickMfrSelect('');
       const modal = document.getElementById('quickProductModal');
       modal.style.display = 'flex';
-      setTimeout(() => document.getElementById('quickProductBrand').focus(), 0);
+      setTimeout(() => document.getElementById('quickMfrSearch').focus(), 0);
     }
     function closeQuickProductModal() {
       document.getElementById('quickProductModal').style.display = 'none';
     }
+    function filterQuickMfrSelect(query) {
+      const sel = document.getElementById('quickMfrSelect');
+      if (!sel) return;
+      const prev = sel.value;
+      sel.innerHTML = manufacturerOptionsHtml(prev ? Number(prev) : null, query);
+    }
     async function applyQuickProductModal() {
-      const brandName = document.getElementById('quickProductBrand').value.trim();
       const productName = document.getElementById('quickProductName').value.trim();
-      if (!brandName || !productName) {
-        alert('브랜드명과 제품명을 모두 입력해주세요.');
-        return;
-      }
+      const mfrVal = document.getElementById('quickMfrSelect').value;
+      if (!mfrVal) { alert('제조사를 선택해주세요.'); return; }
+      if (!productName) { alert('제품명을 입력해주세요.'); return; }
+      const manufacturerId = Number(mfrVal);
+      const m = manufacturers.find(x => x.id === manufacturerId);
+      const brandName = m ? m.name : '';
       // 사전 중복 검사 — 메모리 products 배열의 관리명과 매칭
       if (products.some(p => p.name === productName)) {
         alert('이미 같은 관리명의 제품이 존재합니다.');
@@ -1293,7 +1384,7 @@
       const res = await fetch('/api/products/quick', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ brandName, productName }),
+        body: JSON.stringify({ brandName, productName, manufacturerId }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -1334,6 +1425,9 @@
         schedule: '',
         memo: '',
         ageRange: '',
+        // [요청] 제조사 관리 — 제조사 FK + 협업종료 status
+        manufacturerId: null,
+        status: '',
         photos: []
       });
       openProductIdx = 0;
@@ -1459,6 +1553,13 @@
           return;
         }
       }
+      // [요청] 제조사 관리 — 제품 저장 시 제조사 필수
+      if (p.manufacturerId == null || p.manufacturerId === '') {
+        alert('제조사를 선택해주세요. (제조사 추가 → 제품 추가 순서)');
+        openProductIdx = i;
+        renderProducts();
+        return;
+      }
       const isNew = p.id == null;
       const url = isNew ? '/api/products' : `/api/products/${encodeURIComponent(p.id)}`;
       const method = isNew ? 'POST' : 'PUT';
@@ -1487,6 +1588,235 @@
       clearProductDirty(p);
       renderProducts(); // 뱃지(빠른추가/이미지없음)·needs-attention 갱신
       alert('저장되었습니다.');
+    }
+
+    // ═══════════════════════════════════════
+    //  [요청] 제조사 관리 — 제조사 추가 → 제품 추가 흐름
+    // ═══════════════════════════════════════
+    async function loadManufacturers() {
+      try {
+        const res = await fetch('/api/manufacturers');
+        manufacturers = await res.json();
+      } catch { manufacturers = []; }
+      return manufacturers;
+    }
+
+    // 제품 폼 제조사 콤보박스 — 협업종료 제조사는 기본 제외(단, 현재 선택된 제조사는 항상 노출).
+    function manufacturersForSelect(selectedId, query) {
+      const q = (query || '').trim().toLowerCase();
+      return manufacturers.filter(m => {
+        if (selectedId != null && m.id === Number(selectedId)) return true;
+        if (m.status === '협업종료') return false;
+        if (q && !String(m.name || '').toLowerCase().includes(q)) return false;
+        return true;
+      });
+    }
+    function manufacturerOptionsHtml(selectedId, query) {
+      const list = manufacturersForSelect(selectedId, query);
+      const opts = ['<option value="">— 제조사 선택 —</option>'];
+      for (const m of list) {
+        const label = m.status === '협업종료' ? `${m.name} (협업종료)` : m.name;
+        opts.push(`<option value="${m.id}" ${Number(selectedId) === m.id ? 'selected' : ''}>${esc(label)}</option>`);
+      }
+      return opts.join('');
+    }
+    // 검색어로 콤보박스 옵션만 갱신(포커스 보존을 위해 full re-render 회피)
+    function filterManufacturerSelect(i, query) {
+      const sel = document.getElementById('mfrSelect-' + i);
+      if (!sel) return;
+      const p = products[i];
+      sel.innerHTML = manufacturerOptionsHtml(p ? p.manufacturerId : null, query);
+    }
+    // 제조사 선택 → manufacturerId 세팅 + 브랜드명 자동 채움 + 빈 허들/일정/메모만 상속
+    function selectManufacturer(i, val) {
+      const p = products[i];
+      if (!p) return;
+      const id = (val === '' || val == null) ? null : Number(val);
+      p.manufacturerId = id;
+      const m = manufacturers.find(x => x.id === id);
+      if (m) {
+        p.brandName = m.name;
+        if (!String(p.hurdle || '').trim() && m.hurdle) p.hurdle = m.hurdle;
+        if (!String(p.schedule || '').trim() && m.schedule) p.schedule = m.schedule;
+        if (!String(p.memo || '').trim() && m.memo) p.memo = m.memo;
+      }
+      markProductDirty(p);
+      renderProducts();
+    }
+    // 제품 협업종료/복귀 토글 (저장된 제품만)
+    async function toggleProductStatus(i) {
+      const p = products[i];
+      if (!p) return;
+      if (p.id == null) { alert('먼저 저장한 뒤에 협업종료 처리할 수 있습니다.'); return; }
+      const newStatus = p.status === '협업종료' ? '' : '협업종료';
+      if (newStatus === '협업종료' && !confirm('이 제품을 협업종료 처리할까요?')) return;
+      let res;
+      try {
+        res = await fetch('/api/products/' + encodeURIComponent(p.id), {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...p, status: newStatus }),
+        });
+      } catch (e) { alert('실패(네트워크): ' + e.message); return; }
+      if (!res.ok) { const d = await res.json().catch(() => ({})); alert(d.error || '실패'); return; }
+      p.status = newStatus;
+      renderProducts();
+      showToast(newStatus === '협업종료' ? '협업종료 처리됨' : '진행으로 복귀됨');
+    }
+    function onShowEndedProductsChange() {
+      showEndedProducts = !!document.getElementById('showEndedProducts').checked;
+      renderProducts();
+    }
+
+    // ── 제조사 목록 (제품 관리 2depth) ──
+    function renderManufacturers() {
+      const box = document.getElementById('manufacturersList');
+      if (!box) return;
+      const q = (document.getElementById('manufacturerSearch')?.value || '').trim().toLowerCase();
+      const showEnded = !!document.getElementById('showEndedManufacturers')?.checked;
+      const list = manufacturers.filter(m => {
+        if (!showEnded && m.status === '협업종료') return false;
+        if (q && !`${m.name} ${m.contactPerson} ${m.contact}`.toLowerCase().includes(q)) return false;
+        return true;
+      });
+      const countEl = document.getElementById('manufacturerCount');
+      if (countEl) countEl.textContent = list.length;
+      if (!list.length) {
+        box.innerHTML = '<div style="text-align:center;color:#9ca3af;padding:32px;font-size:14px">제조사가 없습니다. 우측 상단 [+ 제조사 추가]로 등록하세요.</div>';
+        return;
+      }
+      box.innerHTML = list.map(m => {
+        const ended = m.status === '협업종료';
+        const sub = [m.contactPerson, m.contact].filter(Boolean).map(esc).join(' · ');
+        return `
+        <div class="manufacturer-row ${ended ? 'ended' : ''}">
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+              <b>${esc(m.name)}</b>
+              ${ended ? '<span class="mfr-ended-badge">협업종료</span>' : ''}
+              <span style="font-size:12px;color:#9ca3af">제품 ${m.productCount}개</span>
+            </div>
+            ${sub ? `<div style="font-size:12px;color:#6b7280;margin-top:2px">${sub}</div>` : ''}
+          </div>
+          <button class="btn btn-outline btn-sm" onclick="openManufacturerForm(${m.id})">수정</button>
+          ${ended
+            ? `<button class="btn btn-outline btn-sm" onclick="reopenManufacturer(${m.id})">진행 복귀</button>`
+            : `<button class="btn btn-outline btn-sm" onclick="endManufacturer(${m.id})">협업종료</button>`}
+          <!-- [요청] 제조사 삭제(연결 제품도 함께 삭제) — 확인 모달. 덜 눈에 띄게 흰 배경+빨간 테두리/글씨 -->
+          <button class="btn btn-sm" style="background:#fff;border:1px solid #ef4444;color:#ef4444" onclick="openManufacturerDeleteModal(${m.id})">삭제</button>
+        </div>`;
+      }).join('');
+    }
+
+    let editingManufacturerId = null;
+    function openManufacturerForm(id) {
+      editingManufacturerId = (id == null) ? null : Number(id);
+      const m = editingManufacturerId != null ? manufacturers.find(x => x.id === editingManufacturerId) : null;
+      const box = document.getElementById('manufacturerFormBox');
+      box.innerHTML = `
+        <div class="manufacturer-form">
+          <h4 style="margin:0 0 12px;font-size:15px">${m ? '제조사 수정' : '제조사 추가'}</h4>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div class="form-group"><label><span style="color:#ef4444;margin-right:2px">*</span>제조사명</label><input id="mfrName" type="text" value="${m ? esc(m.name) : ''}"></div>
+            <div class="form-group"><label>담당자</label><input id="mfrContactPerson" type="text" value="${m ? esc(m.contactPerson) : ''}" placeholder="선택"></div>
+            <div class="form-group"><label>연락처</label><input id="mfrContact" type="text" value="${m ? esc(m.contact) : ''}" placeholder="선택 (전화·이메일·카톡 등)"></div>
+            <div class="form-group"><label>허들</label><input id="mfrHurdle" type="text" value="${m ? esc(m.hurdle) : ''}" placeholder="선택 (제품 기본값)"></div>
+            <div class="form-group"><label>일정 참고사항</label><input id="mfrSchedule" type="text" value="${m ? esc(m.schedule) : ''}" placeholder="선택 (제품 기본값)"></div>
+          </div>
+          <!-- [요청] 제품 상세에 제조사 메모 표시 — 라벨 '메모' → '제조사 메모' (id/저장 로직 유지) -->
+          <div class="form-group"><label>제조사 메모</label><textarea id="mfrMemo" rows="2" placeholder="선택">${m ? esc(m.memo) : ''}</textarea></div>
+          <div style="display:flex;gap:8px;justify-content:flex-end">
+            <button class="btn btn-outline btn-sm" onclick="closeManufacturerForm()">취소</button>
+            <button class="btn btn-primary btn-sm" onclick="saveManufacturer()">저장</button>
+          </div>
+        </div>`;
+      box.style.display = 'block';
+      setTimeout(() => document.getElementById('mfrName')?.focus(), 0);
+    }
+    function closeManufacturerForm() {
+      const box = document.getElementById('manufacturerFormBox');
+      box.innerHTML = '';
+      box.style.display = 'none';
+      editingManufacturerId = null;
+    }
+    async function saveManufacturer() {
+      const payload = {
+        name: document.getElementById('mfrName').value.trim(),
+        contactPerson: document.getElementById('mfrContactPerson').value.trim(),
+        contact: document.getElementById('mfrContact').value.trim(),
+        hurdle: document.getElementById('mfrHurdle').value.trim(),
+        schedule: document.getElementById('mfrSchedule').value.trim(),
+        memo: document.getElementById('mfrMemo').value.trim(),
+      };
+      if (!payload.name) { alert('제조사명은 필수입니다.'); return; }
+      const isEdit = editingManufacturerId != null;
+      const url = isEdit ? '/api/manufacturers/' + editingManufacturerId : '/api/manufacturers';
+      const method = isEdit ? 'PUT' : 'POST';
+      let res;
+      try {
+        res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      } catch (e) { alert('저장 실패(네트워크): ' + e.message); return; }
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { alert(data.error || '저장 실패'); return; }
+      closeManufacturerForm();
+      await loadManufacturers();
+      renderManufacturers();
+      showToast(isEdit ? '제조사 수정됨' : '제조사 추가됨');
+    }
+    async function endManufacturer(id) {
+      const m = manufacturers.find(x => x.id === Number(id));
+      const n = m ? m.productCount : 0;
+      if (!confirm(`'${m ? m.name : ''}'을(를) 협업종료 처리합니다.\n\n연결된 제품 ${n}개도 함께 협업종료됩니다.\n계속하시겠습니까?`)) return;
+      let res;
+      try {
+        res = await fetch('/api/manufacturers/' + id + '/status', {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: '협업종료' }),
+        });
+      } catch (e) { alert('실패(네트워크): ' + e.message); return; }
+      if (!res.ok) { const d = await res.json().catch(() => ({})); alert(d.error || '실패'); return; }
+      await loadManufacturers();
+      renderManufacturers();
+      await loadProducts(); // 캐스케이드로 제품 status가 바뀌었으니 제품 목록 재로드
+      showToast('협업종료 처리됨');
+    }
+    async function reopenManufacturer(id) {
+      let res;
+      try {
+        res = await fetch('/api/manufacturers/' + id + '/status', {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: '' }),
+        });
+      } catch (e) { alert('실패(네트워크): ' + e.message); return; }
+      if (!res.ok) { const d = await res.json().catch(() => ({})); alert(d.error || '실패'); return; }
+      await loadManufacturers();
+      renderManufacturers();
+      showToast('진행으로 복귀됨 (제품은 개별 복귀하세요)');
+    }
+
+    // [요청] 제조사 삭제(연결 제품도 함께 삭제) — 확인 모달
+    let deletingManufacturerId = null;
+    function openManufacturerDeleteModal(id) {
+      deletingManufacturerId = Number(id);
+      const m = manufacturers.find(x => x.id === deletingManufacturerId);
+      const n = m ? m.productCount : 0;
+      document.getElementById('manufacturerDeleteName').textContent = m ? m.name : '';
+      document.getElementById('manufacturerDeleteWarn').textContent = `연결된 제품 ${n}개도 같이 삭제됩니다.`;
+      document.getElementById('manufacturerDeleteModal').style.display = 'flex';
+    }
+    function closeManufacturerDeleteModal() {
+      document.getElementById('manufacturerDeleteModal').style.display = 'none';
+      deletingManufacturerId = null;
+    }
+    async function confirmDeleteManufacturer() {
+      if (deletingManufacturerId == null) return;
+      let res;
+      try {
+        res = await fetch('/api/manufacturers/' + deletingManufacturerId, { method: 'DELETE' });
+      } catch (e) { alert('삭제 실패(네트워크): ' + e.message); return; }
+      if (!res.ok) { const d = await res.json().catch(() => ({})); alert(d.error || '삭제 실패'); return; }
+      closeManufacturerDeleteModal();
+      await loadManufacturers();
+      renderManufacturers();
+      await loadProducts(); // 연결 제품도 삭제됐으니 제품 목록 재로드
+      showToast('제조사 및 연결 제품 삭제됨');
     }
 
     // ═══════════════════════════════════════
@@ -2462,7 +2792,8 @@
     loadSettings();
     loadAccounts();
     loadEmailAccounts();
-    loadProducts();
+    // [요청] 제조사 관리 — 제조사 먼저 로드(제품 콤보박스 옵션) 후 제품 로드
+    loadManufacturers().then(loadProducts);
     loadInfluencers();
     // [요청] 카드 단위 저장 — 입력 발생한 카드만 dirty 마킹
     function dirtyFromEvent(e) {
@@ -3006,6 +3337,7 @@
       leadModal: closeLeadModal,
       quickProductModal: closeQuickProductModal,
       catalogModal: closeCatalogModal,
+      manufacturerDeleteModal: closeManufacturerDeleteModal,
     };
     document.addEventListener('keydown', (e) => {
       if (e.key !== 'Escape') return;
@@ -3202,10 +3534,12 @@
         <h3 style="margin:0;font-size:18px">빠른 제품 추가</h3>
         <button class="btn btn-sm" style="background:transparent;color:#6b7280;padding:4px 8px" onclick="closeQuickProductModal()">✕</button>
       </div>
-      <div style="font-size:13px;color:#6b7280">관리명은 입력한 "제품명"으로 자동 설정됩니다 (추후 수정 가능).</div>
+      <div style="font-size:13px;color:#6b7280">관리명은 입력한 "제품명"으로 자동 설정됩니다 (추후 수정 가능). 브랜드명은 선택한 제조사명으로 채워집니다.</div>
+      <!-- [요청] 제조사 관리 — 빠른추가 제조사 검색 콤보박스(필수) -->
       <div class="form-group">
-        <label>브랜드명 <span style="color:#ef4444">*</span></label>
-        <input id="quickProductBrand" type="text" placeholder="예: ABC컴퍼니">
+        <label>제조사 <span style="color:#ef4444">*</span></label>
+        <input id="quickMfrSearch" type="text" placeholder="제조사 검색..." oninput="filterQuickMfrSelect(this.value)" style="margin-bottom:6px">
+        <select id="quickMfrSelect"></select>
       </div>
       <div class="form-group">
         <label>제품명 <span style="color:#ef4444">*</span></label>
@@ -3214,6 +3548,22 @@
       <div style="display:flex;gap:8px;justify-content:flex-end">
         <button class="btn btn-outline btn-sm" onclick="closeQuickProductModal()">취소</button>
         <button class="btn btn-primary btn-sm" onclick="applyQuickProductModal()">추가</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- [요청] 제조사 삭제 확인 모달 (연결 제품도 함께 삭제) -->
+  <div id="manufacturerDeleteModal" class="modal-backdrop" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center">
+    <div style="background:white;border-radius:12px;padding:24px;max-width:420px;width:90%;display:flex;flex-direction:column;gap:14px;box-shadow:0 10px 40px rgba(0,0,0,0.2)">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <h3 style="margin:0;font-size:18px">제조사 삭제 — <span id="manufacturerDeleteName"></span></h3>
+        <button class="btn btn-sm" style="background:transparent;color:#6b7280;padding:4px 8px" onclick="closeManufacturerDeleteModal()">✕</button>
+      </div>
+      <div id="manufacturerDeleteWarn" style="color:#ef4444;font-weight:600;font-size:14px"></div>
+      <div style="font-size:15px">삭제하시겠습니까?</div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn btn-outline btn-sm" onclick="closeManufacturerDeleteModal()">취소</button>
+        <button class="btn btn-danger btn-sm" onclick="confirmDeleteManufacturer()">확인</button>
       </div>
     </div>
   </div>

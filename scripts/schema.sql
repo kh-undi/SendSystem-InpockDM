@@ -376,3 +376,32 @@ create index if not exists idx_phrases_employee on phrases(employee_id, sort_ord
 
 -- [요청] 직원별 문구 고정 — 기존 테이블용 마이그레이션 (이미 배포된 DB는 위 create가 no-op이라 1회 실행 필요).
 alter table phrases add column if not exists pinned boolean not null default false;
+
+------------------------------------------------------------
+-- 12. manufacturers : 제조사 마스터
+--   [요청] 제조사 관리 기능 — 제조사 추가 → 제품 추가 흐름
+--   - 제품(products)이 manufacturer_id로 참조. 제조사 선택 시 brand_name 자동 채움(UI).
+--   - 허들/일정/메모는 제조사 기본값 → 제품에 상속(제품 단위 override 가능).
+--   - 담당자(contact_person)/연락처(contact)는 제조사 전용 필드.
+--   - status: 빈값('')=진행 / '협업종료'. 협업종료 시 연결된 제품 status도 함께 '협업종료'(앱에서 캐스케이드).
+------------------------------------------------------------
+create table if not exists manufacturers (
+  id              serial      primary key,
+  name            text        not null unique,
+  contact_person  text,
+  contact         text,
+  hurdle          text,
+  schedule        text,
+  memo            text,
+  status          text        not null default '',   -- '' = 진행, '협업종료'
+  created_at      timestamptz not null default now(),
+  updated_at      timestamptz not null default now()
+);
+
+-- [요청] 제조사 관리 — products에 제조사 FK + 협업종료 status 컬럼 추가.
+--   manufacturers를 위에서 먼저 생성하므로 이 ALTER가 안전하게 참조 가능.
+--   on delete set null: 제조사 실삭제는 드묾(협업종료가 정상 경로). 만약 삭제돼도 제품은 보존.
+--   ⚠️ 이미 배포된 운영 DB는 이 블록(12번)을 SQL Editor에서 1회 실행해야 함.
+alter table products add column if not exists manufacturer_id int references manufacturers(id) on delete set null;
+alter table products add column if not exists status text not null default '';   -- '' = 진행, '협업종료'
+create index if not exists idx_products_manufacturer on products(manufacturer_id);

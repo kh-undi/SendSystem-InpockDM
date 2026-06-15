@@ -92,6 +92,8 @@ async function listSupabase() {
       'mail_subject, usp, offer_message, ' +
       'hooking_phrases, product_link, announce_example_link, announce_example_owner, ' +
       'hurdle, schedule, memo, age_range, ' +
+      // [요청] 제조사 관리 — 제조사 FK + 협업종료 status
+      'manufacturer_id, status, ' +
       'product_photos(url, sort_order)'
     )
     // [요청] 빠른 제품 추가 — 신규 row가 위로 오도록 created_at DESC. 같은 batch(replaceAll)는 created_at 동일 → id ASC로 메모리 순서 보존.
@@ -117,6 +119,9 @@ async function listSupabase() {
     schedule: p.schedule || '',
     memo: p.memo || '',
     ageRange: p.age_range || '',
+    // [요청] 제조사 관리 — 제조사 FK + 협업종료 status
+    manufacturerId: p.manufacturer_id ?? null,
+    status: p.status || '',
     photos: (p.product_photos || [])
       .slice()
       .sort((a, b) => a.sort_order - b.sort_order)
@@ -150,6 +155,9 @@ async function replaceAllSupabase(products) {
     schedule: p.schedule || null,
     memo: p.memo || null,
     age_range: p.ageRange || null,
+    // [요청] 제조사 관리 — 제조사 FK + 협업종료 status
+    manufacturer_id: p.manufacturerId ?? null,
+    status: p.status || '',
   }));
   const { data: inserted, error } = await supabase
     .from('products').insert(productRows).select('id, name');
@@ -189,6 +197,9 @@ function toRow(product) {
     schedule: product.schedule || null,
     memo: product.memo || null,
     age_range: product.ageRange || null,
+    // [요청] 제조사 관리 — 제조사 FK + 협업종료 status
+    manufacturer_id: product.manufacturerId ?? null,
+    status: product.status || '',
   };
 }
 
@@ -273,6 +284,52 @@ async function uploadPhotoSupabase(localPath) {
   return data.publicUrl;
 }
 
+// [요청] 제조사 관리 — 제조사 협업종료 시 연결 제품 캐스케이드.
+//   status를 일괄 세팅(예: '협업종료'). opts.clearManufacturer면 status 대신 manufacturer_id를 null로(제조사 삭제 시 JSON 모드 정리용).
+async function setStatusByManufacturerSupabase(manufacturerId, status, opts = {}) {
+  const patch = opts.clearManufacturer ? { manufacturer_id: null } : { status };
+  const { error } = await supabase
+    .from('products').update(patch).eq('manufacturer_id', Number(manufacturerId));
+  if (error) throw error;
+}
+async function setStatusByManufacturerJson(manufacturerId, status, opts = {}) {
+  const raw = jsonLoadRaw();
+  const list = raw.products || [];
+  let changed = false;
+  for (const p of list) {
+    if (Number(p.manufacturerId) === Number(manufacturerId)) {
+      if (opts.clearManufacturer) p.manufacturerId = null;
+      else p.status = status;
+      changed = true;
+    }
+  }
+  if (changed) jsonSave(list);
+}
+async function setStatusByManufacturer(manufacturerId, status, opts = {}) {
+  return config.USE_SUPABASE
+    ? setStatusByManufacturerSupabase(manufacturerId, status, opts)
+    : setStatusByManufacturerJson(manufacturerId, status, opts);
+}
+
+// [요청] 제조사 삭제 시 연결 제품도 함께 삭제 — 해당 manufacturer_id 제품 일괄 삭제.
+async function removeByManufacturerSupabase(manufacturerId) {
+  // product_photos는 products FK on delete cascade로 함께 삭제됨.
+  const { error } = await supabase
+    .from('products').delete().eq('manufacturer_id', Number(manufacturerId));
+  if (error) throw error;
+}
+async function removeByManufacturerJson(manufacturerId) {
+  const raw = jsonLoadRaw();
+  const list = raw.products || [];
+  const kept = list.filter(p => Number(p.manufacturerId) !== Number(manufacturerId));
+  if (kept.length !== list.length) jsonSave(kept);
+}
+async function removeByManufacturer(manufacturerId) {
+  return config.USE_SUPABASE
+    ? removeByManufacturerSupabase(manufacturerId)
+    : removeByManufacturerJson(manufacturerId);
+}
+
 // ─── 공용 API ───
 async function list() {
   return config.USE_SUPABASE ? listSupabase() : listJson();
@@ -305,4 +362,4 @@ async function removeOne(id) {
   return config.USE_SUPABASE ? removeOneSupabase(id) : removeOneJson(id);
 }
 
-module.exports = { list, replaceAll, getByName, uploadPhoto, insertOne, updateOne, removeOne };
+module.exports = { list, replaceAll, getByName, uploadPhoto, insertOne, updateOne, removeOne, setStatusByManufacturer, removeByManufacturer };

@@ -38,6 +38,33 @@ N명에게서 답장 (M명 거절)
 [ 실행계획 ]
 
 [ 작업완료 ]
+## 제품 상세에 '제조사 메모' 표시 추가 (26.06.15)
+제품 상세 메모(`products.memo`)와 제조사 메모(`manufacturers.memo`)는 서로 다른 테이블 필드. 제품 상세에서 연결 제조사의 메모를 함께 볼 수 있게 추가하고, 제조사 폼 라벨도 정리. UI 전용 변경([public/index.html](public/index.html)) — 백엔드/repo/스키마 변경 없음(`manufacturers` 배열에 `memo` 이미 로드, 제품 카드에 `manufacturerId` 보유).
+- **제품 목록 탭 — 제조사 메모 표시(읽기전용)**: `renderProducts()` 상단 그리드 제품명↔카테고리 사이에 '제조사 메모' 블록 신설(full-width `grid-column:1/-1`로 제조사·제품명 행 다음 / 카테고리·캠페인유형 행 앞에 위치 → 요청 순서 제조사→제품명→제조사 메모→카테고리→캠페인 유형 충족). 인라인 IIFE로 `manufacturers.find(x => x.id === p.manufacturerId)` 조회 후 `m.memo`를 readonly textarea(회색 배경)로 노출, 제조사 미선택 시 "제조사 선택 시 표시" / 선택했지만 메모 없으면 "제조사 메모 없음" placeholder. `selectManufacturer`가 끝에서 `renderProducts()` 호출하므로 제조사 변경 시 자동 갱신.
+- **제조사 목록 탭 — 라벨 변경**: 제조사 추가/수정 폼 '메모' → '제조사 메모'(id `mfrMemo`·저장 로직 유지).
+- 제품 자체 메모(내부용)는 기존대로 편집 가능(별개 유지). 제조사 메모 비었을 때 제품 메모로의 기존 1회 상속(`selectManufacturer`)도 유지(변경 없음).
+
+## 제조사 목록 — 협업종료 외 '삭제' 버튼 추가 (확인 모달, 연결 제품도 함께 삭제) (26.06.15)
+제조사 목록 각 행에 협업종료(유지)와 별개로 '삭제' 버튼 추가. 삭제 시 확인 모달(빨강 글씨 "연결된 제품 N개도 같이 삭제됩니다." + "삭제하시겠습니까?")을 띄우고, 확인하면 **제조사 + 연결 제품을 함께 하드 삭제**.
+- **동작 변경**: 기존 `removeOne`은 FK set null(제품 보존)이었으나, 이제 연결 제품까지 함께 삭제.
+- **productsRepo** [src/repo/productsRepo.js](src/repo/productsRepo.js): `removeByManufacturer(manufacturerId)` 신설(dual-mode) — Supabase `delete().eq('manufacturer_id', id)`(product_photos는 FK cascade 자동), JSON은 해당 제품 제거 후 저장. export 추가.
+- **manufacturersRepo** [src/repo/manufacturersRepo.js](src/repo/manufacturersRepo.js): 공용 `removeOne(id)`이 제조사 삭제 전 `productsRepo.removeByManufacturer(id)` 호출(제품 먼저 → 제조사). `removeOneJson`의 기존 manufacturerId 정리(setStatusByManufacturer clearManufacturer) 호출 제거, `removeOneSupabase` 주석 갱신.
+- **Server** [server.js](server.js): `DELETE /api/manufacturers/:id` 그대로(내부 removeOne이 캐스케이드). 변경 없음.
+- **UI** [public/index.html](public/index.html): `renderManufacturers()` 각 행에 `삭제` 버튼(흰 배경+빨간 테두리/글씨, 협업종료는 btn-outline 회색으로 변경해 위계 구분). 삭제 확인 모달 `#manufacturerDeleteModal` 신설(modal-backdrop 패턴, ESC/✕만 닫힘) — `#manufacturerDeleteName`/`#manufacturerDeleteWarn`(빨강 N) + "삭제하시겠습니까?" + [취소]/[확인]. `openManufacturerDeleteModal(id)`/`closeManufacturerDeleteModal()`/`confirmDeleteManufacturer()`(DELETE → loadManufacturers+renderManufacturers+loadProducts → 토스트). `MODAL_CLOSERS`에 등록.
+- 검증: `node --check`(server/repos) 통과, index.html 인라인 스크립트 파싱 OK, JSON 모드 캐스케이드 삭제 테스트(제조사A 삭제 시 A제품 2건 동반 삭제, 타 제조사 제품 보존) 확인. 실동작은 수동(`npm run ui`).
+## 제조사 관리 기능 — 제조사 추가 → 제품 추가 흐름 (26.06.12)
+제품 관리 1Depth 아래 2Depth(제품 목록 / 제조사 목록) 신설. 제조사를 먼저 등록하면 제품 추가 시 선택만으로 브랜드명·허들·일정·메모가 채워짐. 삭제 대신 `협업종료` 상태값 도입(제조사 협업종료 시 연결 제품도 캐스케이드). 기존 ~70건은 brand_name 기준 제조사 자동 생성 + 연결 스크립트 제공.
+- **스키마** [scripts/schema.sql](scripts/schema.sql): 12번 블록 신설 — `manufacturers`(id/name unique/contact_person/contact/hurdle/schedule/memo/`status` default ''/created_at/updated_at) + `alter table products add manufacturer_id int references manufacturers(id) on delete set null` + `add status text not null default ''` + `idx_products_manufacturer`. ⚠️ 운영 Supabase는 이 블록 SQL Editor에서 1회 실행 필요. (manufacturers를 먼저 create 후 products ALTER가 참조하므로 한 블록 내 순서 안전.)
+- **config.js** [config.js](config.js): `PATHS.manufacturers`(manufacturers.json) 추가.
+- **Repo 신설** [src/repo/manufacturersRepo.js](src/repo/manufacturersRepo.js): dual-mode. `list`(productCount·status 포함, name 정렬)/`insertOne`/`updateOne`/`removeOne` + `endCollaboration(id)`/`reopen(id)`. validation `NAME_REQUIRED`, `DUPLICATE_NAME`(23505), `NOT_FOUND`(PGRST116). `endCollaboration`은 제조사 status='협업종료' + productsRepo.`setStatusByManufacturer`로 연결 제품 캐스케이드. `reopen`은 제조사만 복귀(제품 미변경). productCount는 productsRepo.list 기반 집계(양 모드 공통). 순환참조 없음(productsRepo는 manufacturersRepo를 require 안 함).
+- **productsRepo** [src/repo/productsRepo.js](src/repo/productsRepo.js): `toRow`/`replaceAllSupabase`/`listSupabase` select·반환에 `manufacturer_id`(↔`manufacturerId`)·`status` 추가. JSON 모드는 spread로 패스스루. `setStatusByManufacturer(manufacturerId, status, {clearManufacturer})` 헬퍼 신설 — Supabase 1쿼리 update / JSON 배열 순회. `clearManufacturer`는 JSON 모드 제조사 삭제 시 manufacturerId null 정리용.
+- **Server** [server.js](server.js): `GET/POST /api/manufacturers`, `PUT /api/manufacturers/:id`, `PUT /api/manufacturers/:id/status`(협업종료/복귀), `DELETE /api/manufacturers/:id` 추가. `validateProductBody`에 manufacturerId 필수(`'제조사를 선택해주세요...'`→400). 빠른추가(`/api/products/quick`)도 manufacturerId 필수 + brandName은 선택 제조사명 사용.
+- **UI** [public/index.html](public/index.html): 제품 관리 1depth를 `data-group="products"` 그룹 탭으로, `#subtabs-products`(제품 목록/제조사 목록) 신설. 탭 JS를 `SUBGROUPS` 맵 + 제네릭 `activateSub(group, panel)`로 리팩터(기존 `activateInpockSub`는 래퍼 유지, 1depth/서브탭/`goToSettings` 모두 다중 그룹 대응). `#panel-manufacturers` 신설(제조사 목록 + 인라인 추가/수정 폼 `manufacturerFormBox` + 협업종료/복귀 버튼 + 검색·"협업종료 포함" 토글). 제품 카드의 브랜드명 input → **제조사 검색 콤보박스**(검색 input + `#mfrSelect-{i}`, 협업종료 제조사 기본 제외): 선택 시 manufacturerId+brandName+빈 허들/일정/메모 상속. 제품 카드에 협업종료/복귀 토글 + `ended` 회색 처리 + 기본 숨김("협업종료 포함" 토글). 빠른추가 모달도 제조사 콤보박스로 교체. init은 `loadManufacturers().then(loadProducts)`로 콤보박스 옵션 선로딩. CSS `.manufacturer-row(.ended)`/`.manufacturer-form`/`.mfr-ended-badge`/`.product-card.ended`/`.product-ended-badge` 신설.
+- **마이그레이션** [scripts/migrateBrandsToManufacturers.js](scripts/migrateBrandsToManufacturers.js) 신설: distinct brand_name → manufacturers 생성(멱등) + manufacturer_id 비어있는 제품을 brand_name==name으로 연결. dual-mode, dry-run 기본 / `--force` 반영. ⚠️ **제품 제조사 필수 검증이 이미 적용돼 있으므로, 기존 제품을 다시 저장하려면 이 스크립트를 먼저 `--force`로 1회 실행**해야 함.
+- **CLAUDE.md** [CLAUDE.md](CLAUDE.md): 테이블 11→12개(`manufacturers` 추가, products manufacturer_id/status 표기), repo 목록·JSON 폴백(`manufacturers.json`) 갱신.
+- 검증: `node --check`(server/repos/config/migration) 통과. index.html 인라인 스크립트 파싱 OK. JSON 모드 기능 테스트로 협업종료 캐스케이드/복귀/productCount/중복차단/삭제 시 manufacturerId 정리까지 확인. index.html 실동작은 수동(`npm run ui`).
+- **운영 적용 순서**: ① schema.sql 12번 블록 Supabase 실행 → ② `node scripts/migrateBrandsToManufacturers.js`(dry-run 확인) → ③ `--force` 반영 → ④ UI 확인.
+
 ## 발송 ↔ 답장확인 상호 배타 + 헤더 뱃지 3분기 (26.06.09)
 발송과 답장확인을 동시 실행 못 하게 막고(기존엔 "발송 중→답장확인"만 차단되고 "답장확인 중→발송"은 뚫려 있던 비대칭 구멍), 우상단 헤더 뱃지를 발송/답장확인/준비 3분기로 표시.
 - **상호 배타** [server.js](server.js): `/api/macro/start`에 `if (replyProcess) return 400('답장확인이 실행 중입니다.')` 추가. 반대 방향(`/api/replies/check`의 macroProcess 체크)은 이미 존재 → 양방향 배타 완성. 둘 다 같은 인포크 계정 로그인/캐시클리어를 하므로 겹치면 세션 꼬임 방지가 목적.

@@ -43,6 +43,8 @@ module.exports = {
     screenshots: path.resolve(__dirname, 'screenshots'),
     // [요청] 리드 관리 탭 신설 — JSON 폴백 경로
     leads: path.resolve(__dirname, 'leads.json'),
+    // [요청] 제조사 관리 기능 — JSON 폴백 경로
+    manufacturers: path.resolve(__dirname, 'manufacturers.json'),
   },
 
   MAIL_SUBJECT_PREFIX: '[언엑스 공동구매]',
