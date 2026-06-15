@@ -38,6 +38,10 @@ N명에게서 답장 (M명 거절)
 [ 실행계획 ]
 
 [ 작업완료 ]
+## 협업종료 버튼 노란색감으로 변경 (26.06.15)
+제조사 목록의 '협업종료' 버튼을 노란색 계열로 변경. UI 전용([public/index.html](public/index.html)).
+- `.btn-warn` CSS 신설(`.btn-outline` 아래): 옅은 노란 배경(`#fffbeb`)+노란 테두리(`#f59e0b`)/글씨(`#b45309`), hover `#fef3c7`.
+- 제조사 행 '협업종료' 버튼(`endManufacturer`) 클래스 `btn-outline`→`btn-warn`. '진행 복귀'는 btn-outline 유지, 제품 카드 토글 버튼은 미변경.
 ## 제품 상세에 '제조사 메모' 표시 추가 (26.06.15)
 제품 상세 메모(`products.memo`)와 제조사 메모(`manufacturers.memo`)는 서로 다른 테이블 필드. 제품 상세에서 연결 제조사의 메모를 함께 볼 수 있게 추가하고, 제조사 폼 라벨도 정리. UI 전용 변경([public/index.html](public/index.html)) — 백엔드/repo/스키마 변경 없음(`manufacturers` 배열에 `memo` 이미 로드, 제품 카드에 `manufacturerId` 보유).
 - **제품 목록 탭 — 제조사 메모 표시(읽기전용)**: `renderProducts()` 상단 그리드 제품명↔카테고리 사이에 '제조사 메모' 블록 신설(full-width `grid-column:1/-1`로 제조사·제품명 행 다음 / 카테고리·캠페인유형 행 앞에 위치 → 요청 순서 제조사→제품명→제조사 메모→카테고리→캠페인 유형 충족). 인라인 IIFE로 `manufacturers.find(x => x.id === p.manufacturerId)` 조회 후 `m.memo`를 readonly textarea(회색 배경)로 노출, 제조사 미선택 시 "제조사 선택 시 표시" / 선택했지만 메모 없으면 "제조사 메모 없음" placeholder. `selectManufacturer`가 끝에서 `renderProducts()` 호출하므로 제조사 변경 시 자동 갱신.

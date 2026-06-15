@@ -45,6 +45,9 @@
     .btn-success:hover { background: #059669; }
     .btn-outline { background: white; color: #6366f1; border: 1.5px solid #6366f1; }
     .btn-outline:hover { background: #f0f0ff; }
+    /* [요청] 협업종료 버튼 노란색감 */
+    .btn-warn { background: #fffbeb; color: #b45309; border: 1.5px solid #f59e0b; }
+    .btn-warn:hover { background: #fef3c7; }
     .btn-sm { padding: 5px 12px; font-size: 12px; }
     .btn-group { display: flex; gap: 8px; flex-wrap: wrap; }
 
@@ -1700,7 +1703,7 @@
           <button class="btn btn-outline btn-sm" onclick="openManufacturerForm(${m.id})">수정</button>
           ${ended
             ? `<button class="btn btn-outline btn-sm" onclick="reopenManufacturer(${m.id})">진행 복귀</button>`
-            : `<button class="btn btn-outline btn-sm" onclick="endManufacturer(${m.id})">협업종료</button>`}
+            : `<button class="btn btn-warn btn-sm" onclick="endManufacturer(${m.id})">협업종료</button>`}
           <!-- [요청] 제조사 삭제(연결 제품도 함께 삭제) — 확인 모달. 덜 눈에 띄게 흰 배경+빨간 테두리/글씨 -->
           <button class="btn btn-sm" style="background:#fff;border:1px solid #ef4444;color:#ef4444" onclick="openManufacturerDeleteModal(${m.id})">삭제</button>
         </div>`;
