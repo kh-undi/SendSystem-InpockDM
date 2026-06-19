@@ -105,7 +105,15 @@ async function sendProposal(page, influencer, product, dryRun = false, accountNa
     });
 
     // ── 1-2단계: 제안 버튼 확인 & 클릭 + 새창 잡기 ──
-    const proposalBtn = await page.$(selectors.proposal.sendProposalButton);
+    // [요청] 비즈니스 제안 텍스트 0순위 + 클래스 폴백 (셀렉터 배열 순서대로 시도, 처음 잡히는 버튼 사용)
+    const proposalSelectors = Array.isArray(selectors.proposal.sendProposalButton)
+      ? selectors.proposal.sendProposalButton
+      : [selectors.proposal.sendProposalButton];
+    let proposalBtn = null;
+    for (const sel of proposalSelectors) {
+      proposalBtn = await page.$(sel);
+      if (proposalBtn) break;
+    }
     if (!proposalBtn) {
       console.warn(`${label} 제안 버튼이 없음 - 건너뜀`);
       return { success: false, error: '제안 버튼이 페이지에 없음' };

@@ -37,7 +37,11 @@ module.exports = {
   // ===== 제안서 작성 =====
   proposal: {
     // 1단계: 인플루언서 인포크 링크 페이지에서 제안 버튼
-    sendProposalButton: 'button.css-mu3olj.e1usujon0',
+    // [요청] 비즈니스 제안 텍스트 0순위 + 기존 클래스 폴백 (배열 순서대로 시도)
+    sendProposalButton: [
+      'button:has(span:text("비즈니스 제안"))', // 0순위: 텍스트 기반(해시 클래스 변경에 강함)
+      'button.css-mu3olj.e1usujon0', // 폴백: 기존 클래스
+    ],
     // 1-2단계: "제안 보내기" 버튼
     sendProposalButton2: 'button.inpock-button.size-medium.type-secondary.full-width',
 

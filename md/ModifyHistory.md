@@ -38,6 +38,11 @@ N명에게서 답장 (M명 거절)
 [ 실행계획 ]
 
 [ 작업완료 ]
+## 제안 버튼 셀렉터 — '비즈니스 제안' 텍스트 기반 0순위 + 기존 클래스 폴백 유지 (26.06.19)
+인포크 인플루언서 페이지의 1단계 제안 버튼이 새 양식(`<button class="css-1dhefbq e13yc11r0">…<span>비즈니스 제안</span></button>`)으로 바뀌어 기존 해시 클래스 셀렉터(`button.css-mu3olj.e1usujon0`)가 매칭 실패하던 문제. 텍스트 기반 셀렉터를 0순위, 기존 클래스를 폴백으로 둠.
+- **[src/selectors.js:39-44](src/selectors.js#L39-L44)**: `proposal.sendProposalButton`을 문자열→배열로 변경. `['button:has(span:text("비즈니스 제안"))'(0순위, 텍스트), 'button.css-mu3olj.e1usujon0'(폴백, 기존 클래스)]`.
+- **[src/proposal.js:107-119](src/proposal.js#L107-L119)**: 단건 `page.$()` 조회를 셀렉터 배열 순회로 교체 — 처음 잡히는 버튼 사용, 전부 못 찾으면 기존처럼 "제안 버튼이 없음" 처리. 배열/단일 문자열 모두 허용(`Array.isArray` 가드)해 향후 호환 유지.
+- 사용처는 proposal.js 1곳뿐(grep 확인) → 호환 리스크 없음. `node --check` 통과. 실동작은 수동(`npm run ui`).
 ## 협업종료 버튼 노란색감으로 변경 (26.06.15)
 제조사 목록의 '협업종료' 버튼을 노란색 계열로 변경. UI 전용([public/index.html](public/index.html)).
 - `.btn-warn` CSS 신설(`.btn-outline` 아래): 옅은 노란 배경(`#fffbeb`)+노란 테두리(`#f59e0b`)/글씨(`#b45309`), hover `#fef3c7`.
