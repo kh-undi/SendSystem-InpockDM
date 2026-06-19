@@ -35,18 +35,13 @@ N명에게서 답장 (M명 거절)
 
 
 
-## '유틸리티' 탭 → '메모'로 변경 + 우측 끝(주황 영역)으로 분리
-'유틸리티' 탭(자주 사용하는 문구, `data-panel="phrases"`)은 직원용이라 성질이 다름. 탭 이름을 '메모'로 바꾸고, 이 탭만 헤더 우측 끝(스크린샷의 주황색 영역)으로 떨어뜨려 다른 업무 탭들과 시각적으로 구분.
-
 [ 실행계획 ]
 
-## '유틸리티' 탭 → '메모'로 변경 + 우측 끝으로 분리
-- **[public/index.html:276](public/index.html#L276)**: 탭 라벨 `유틸리티` → `메모`로 변경. 주석도 갱신.
-- **우측 끝 이동**: `.tabs`가 flexbox이므로 해당 탭에 `margin-left:auto`를 주면 그 탭부터 오른쪽으로 밀림. 단 현재 마크업 순서상 '메모' 뒤에 '📊 인스타분석' 탭이 있어, `margin-left:auto`만 주면 인스타분석까지 같이 우측에 붙음. → '메모' 탭 마크업을 인스타분석 탭 **뒤(마지막)**로 이동시킨 뒤 `margin-left:auto` 부여 → 메모 탭만 단독으로 우측 끝에 배치.
-- 구현 방식: 인라인 `style="margin-left:auto"` 또는 전용 클래스(`.tab-right`) 신설 중 택1(전용 클래스 권장, 모바일 `.tabs{overflow-x:auto}`와 충돌 시 점검). 탭 클릭/패널 전환 로직은 `data-panel` 기반이라 순서 이동에 영향 없음(확인 필요).
-- UI 전용 변경, 백엔드/repo 무영향.
-
 [ 작업완료 ]
+## '유틸리티' 탭 → '메모'로 변경 + 우측 끝(주황 영역)으로 분리 (26.06.19)
+'유틸리티' 탭(자주 사용하는 문구, `data-panel="phrases"`)은 직원용이라 성질이 달라 탭명을 '메모'로 바꾸고 헤더 우측 끝에 단독 분리. UI 전용 변경([public/index.html](public/index.html)) — 백엔드/repo 무영향, 패널 전환은 `data-panel` 기반이라 마크업 순서 이동 무관.
+- **탭 마크업 재배치**: '메모' 탭(`data-panel="phrases"`) 라벨 `유틸리티`→`메모`로 변경 후, 마크업 위치를 '📊 인스타분석' 탭 **뒤(맨 마지막)**로 이동. 클래스 `tab`→`tab tab-right`.
+- **CSS 신설** (`.tab.active` 아래): `.tab-right { margin-left: auto; }` — flex `.tabs`에서 해당 탭만 우측 끝으로 밀어냄. 인스타분석 등 다른 탭은 좌측 유지.
 ## 제안 버튼 셀렉터 — '비즈니스 제안' 텍스트 기반 0순위 + 기존 클래스 폴백 유지 (26.06.19)
 인포크 인플루언서 페이지의 1단계 제안 버튼이 새 양식(`<button class="css-1dhefbq e13yc11r0">…<span>비즈니스 제안</span></button>`)으로 바뀌어 기존 해시 클래스 셀렉터(`button.css-mu3olj.e1usujon0`)가 매칭 실패하던 문제. 텍스트 기반 셀렉터를 0순위, 기존 클래스를 폴백으로 둠.
 - **[src/selectors.js:39-44](src/selectors.js#L39-L44)**: `proposal.sendProposalButton`을 문자열→배열로 변경. `['button:has(span:text("비즈니스 제안"))'(0순위, 텍스트), 'button.css-mu3olj.e1usujon0'(폴백, 기존 클래스)]`.

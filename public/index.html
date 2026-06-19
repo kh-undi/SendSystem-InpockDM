@@ -19,6 +19,8 @@
     .tab { padding: 14px 24px; cursor: pointer; font-size: 14px; font-weight: 600; color: #6b7280; border-bottom: 3px solid transparent; transition: all 0.2s; }
     .tab:hover { color: #6366f1; }
     .tab.active { color: #6366f1; border-bottom-color: #6366f1; }
+    /* [요청] '메모' 탭 — 직원용이라 성질이 달라 헤더 우측 끝으로 분리 */
+    .tab-right { margin-left: auto; }
     /* [요청] 탭 2depth — 하위 서브탭 바 */
     .subtabs { display: flex; background: #f9fafb; border-bottom: 1px solid #e5e7eb; padding: 0 24px; }
     .subtab { padding: 10px 18px; cursor: pointer; font-size: 13px; font-weight: 600; color: #6b7280; border-bottom: 2px solid transparent; transition: all 0.2s; }
@@ -272,10 +274,10 @@
     <div class="tab" data-panel="leads">리드 관리 <span class="leads-due-badge" id="leadsDueBadge" style="display:none">0</span></div>
     <!-- [요청] 추천 카탈로그 페이지 — 인플루언서별 큐레이션 공유 링크 -->
     <div class="tab" data-panel="catalogs">제품추천생성</div>
-    <!-- [요청] 자주 사용하는 문구 — 직원별 추가/복사 탭 신설 -->
-    <div class="tab" data-panel="phrases">유틸리티</div>
     <!-- [요청] 인스타그램 URL → 평균 릴스 통계 조회 -->
     <div class="tab" data-panel="instagram">📊 인스타분석(미완성)</div>
+    <!-- [요청] '유틸리티'→'메모' 탭명 변경 + 직원용이라 성질이 달라 우측 끝으로 분리(.tab-right=margin-left:auto) -->
+    <div class="tab tab-right" data-panel="phrases">✨ 메모 ✨ </div>
   </div>
 
   <!-- [요청] 제조사 관리 — '제품 관리' 하위 서브탭 바 (제품 목록 / 제조사 목록). 초기 활성 탭이라 기본 노출. -->
