@@ -38,6 +38,14 @@ N명에게서 답장 (M명 거절)
 [ 실행계획 ]
 
 [ 작업완료 ]
+## 제조사 목록 — 행 클릭 인라인 펼침(읽기 → 수정) + 제조사 메모 textarea 자동 높이 (26.06.24)
+제품관리>제조사목록을 행 클릭으로 그 자리에서 펼쳐 읽고, '수정' 버튼으로 같은 위치에서 편집. 제품 상세의 제조사 메모 textarea는 저장된 줄 수에 맞춰 높이 자동. UI 전용 변경([public/index.html](public/index.html)) — 백엔드/repo/스키마 무영향.
+- **제조사 목록 아코디언**: `renderManufacturers()`를 `.manufacturer-item`(헤더 + 펼침 상세) 구조로 재작성. 헤더(`.manufacturer-head`) 클릭 → `toggleManufacturer(id)`로 한 번에 하나만 펼침(`expandedManufacturerId`). 헤더 우측 액션(협업종료/진행복귀/삭제)은 `event.stopPropagation()`으로 토글과 분리. 기존 행별 '수정' 버튼 제거.
+- **읽기 → 수정 2단계**(결정): 펼치면 `manufacturerReadHtml(m)` 읽기 뷰(담당자/연락처/허들/일정/제조사 메모 라벨+값) + [수정] 버튼. [수정] → `startInlineEditManufacturer(id)`(`editingInlineManufacturerId`) → `manufacturerEditFormHtml(m)` 입력 폼(id `mfrInline*`로 상단 폼과 분리) + [저장]/[취소]. 저장 `saveManufacturerInline(id)`은 PUT 후 펼침 유지·읽기 모드 복귀. 취소 `cancelInlineEditManufacturer()`.
+- **상단 `manufacturerFormBox`/`openManufacturerForm()`**: '+ 제조사 추가'(신규) 전용으로 유지(인자 없이 호출 → `m`은 항상 null). `saveManufacturer()` 기존 그대로.
+- **CSS 신설**(`.manufacturer-form` 아래): `.manufacturer-item`/`.manufacturer-head`(cursor·hover)/`.manufacturer-caret`(펼침 시 90° 회전)/`.manufacturer-detail`/`.mfr-read-grid`·`.mfr-read-label`·`.mfr-read-value`.
+- **제조사 메모 자동 높이**(결정 — 줄 수 기반): 제품 상세 readonly textarea의 고정 `rows="2"` 제거, `Math.min(Math.max(memo.split('\n').length, 2), 12)`로 rows 계산(최소 2~최대 12). 빈 메모/미선택은 최소 2줄.
+- 검증: 임베디드 `<script>` `vm.Script` 파싱 통과. 실동작은 `npm run ui` 수동 확인.
 ## 추천 카탈로그 모달 — 제품 좌우 이동 버튼 추가 (26.06.24)
 공개 추천 페이지(`/recommend/?c=<code>`) 제품 상세 모달에 이전/다음 제품 이동 버튼(‹ ›) 추가. 모바일 터치 우선. UI 전용 변경([public/recommend/catalog.js](public/recommend/catalog.js) + [public/recommend/style.css](public/recommend/style.css)) — 백엔드/RPC/데이터 무영향.
 - **catalog.js**: 모듈 변수 `currentIdx`로 열린 제품 인덱스 추적(`openModal`에서 저장, `closeModal`에서 -1 리셋). `openModal()`이 전체 제품 수 기준으로 좌우 버튼 HTML 생성 — `idx>0`일 때만 ‹(prev), `idx<total-1`일 때만 ›(next) → 첫 제품은 next만, 마지막은 prev만. 사진 있으면 `.modal-photo-wrap`으로 감싸 그 안에 버튼(사진 영역 세로 중앙 고정 — 내용 긴 제품 스크롤 시 버튼 사라짐 회피), 없으면 `.modal-content` 상단 폴백. `window.prevProduct`/`window.nextProduct`(경계 가드 포함)가 `openModal(currentIdx∓1)` 재호출. 기존 `keydown` 리스너에 ←/→ 추가(모달 열림 시만).

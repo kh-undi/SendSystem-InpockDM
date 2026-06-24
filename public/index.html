@@ -215,6 +215,18 @@
     .manufacturer-row { display:flex; align-items:center; gap:8px; padding:12px 0; border-bottom:1px solid #f3f4f6; }
     .manufacturer-row.ended { opacity:0.5; }
     .manufacturer-form { background:#f9fafb; border:1px solid #e5e7eb; border-radius:8px; padding:16px; margin-bottom:16px; }
+    /* [요청] 제조사 목록 — 행 클릭 인라인 펼침/수정 */
+    .manufacturer-item { border-bottom:1px solid #f3f4f6; }
+    .manufacturer-item.ended .manufacturer-head { opacity:0.5; }
+    .manufacturer-head { display:flex; align-items:center; gap:8px; padding:12px 0; cursor:pointer; }
+    .manufacturer-head:hover { background:#fafafa; }
+    .manufacturer-caret { color:#9ca3af; font-size:12px; width:14px; text-align:center; transition:transform .15s; flex:none; }
+    .manufacturer-item.open .manufacturer-caret { transform:rotate(90deg); }
+    .manufacturer-detail { background:#f9fafb; border:1px solid #e5e7eb; border-radius:8px; padding:16px; margin:0 0 12px; }
+    .mfr-read-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px 16px; }
+    .mfr-read-grid .full { grid-column:1/-1; }
+    .mfr-read-label { font-size:12px; color:#9ca3af; margin-bottom:2px; }
+    .mfr-read-value { font-size:14px; color:#374151; white-space:pre-wrap; word-break:break-word; }
     .mfr-ended-badge { background:#9ca3af; color:#fff; font-size:11px; padding:1px 7px; border-radius:6px; }
     .product-card.ended { opacity:0.5; }
     .product-ended-badge { background:#9ca3af; color:#fff; font-size:11px; padding:1px 7px; border-radius:6px; margin-left:6px; }
@@ -1235,7 +1247,9 @@
                 ${(() => {
                   const mm = manufacturers.find(x => x.id === p.manufacturerId);
                   const memo = mm && mm.memo ? mm.memo : '';
-                  return `<textarea rows="2" readonly onclick="event.stopPropagation()" style="background:#f9fafb;color:#6b7280;cursor:default" placeholder="${mm ? '제조사 메모 없음' : '제조사 선택 시 표시'}">${esc(memo)}</textarea>`;
+                  // [요청] 제조사 메모 textarea 자동 높이 — 저장된 메모 줄 수에 맞춰 rows(최소 2 ~ 최대 12)
+                  const rows = Math.min(Math.max(memo.split('\n').length, 2), 12);
+                  return `<textarea rows="${rows}" readonly onclick="event.stopPropagation()" style="background:#f9fafb;color:#6b7280;cursor:default" placeholder="${mm ? '제조사 메모 없음' : '제조사 선택 시 표시'}">${esc(memo)}</textarea>`;
                 })()}
               </div>
               <div class="form-group">
@@ -1689,27 +1703,114 @@
         box.innerHTML = '<div style="text-align:center;color:#9ca3af;padding:32px;font-size:14px">제조사가 없습니다. 우측 상단 [+ 제조사 추가]로 등록하세요.</div>';
         return;
       }
+      // [요청] 제조사 목록 — 행 클릭 시 인라인 펼침(읽기) → '수정' 버튼으로 편집 전환
       box.innerHTML = list.map(m => {
         const ended = m.status === '협업종료';
         const sub = [m.contactPerson, m.contact].filter(Boolean).map(esc).join(' · ');
+        const open = expandedManufacturerId === m.id;
+        const detail = open
+          ? `<div class="manufacturer-detail">${editingInlineManufacturerId === m.id ? manufacturerEditFormHtml(m) : manufacturerReadHtml(m)}</div>`
+          : '';
         return `
-        <div class="manufacturer-row ${ended ? 'ended' : ''}">
-          <div style="flex:1;min-width:0">
-            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-              <b>${esc(m.name)}</b>
-              ${ended ? '<span class="mfr-ended-badge">협업종료</span>' : ''}
-              <span style="font-size:12px;color:#9ca3af">제품 ${m.productCount}개</span>
+        <div class="manufacturer-item ${ended ? 'ended' : ''} ${open ? 'open' : ''}">
+          <div class="manufacturer-head" onclick="toggleManufacturer(${m.id})">
+            <span class="manufacturer-caret">▶</span>
+            <div style="flex:1;min-width:0">
+              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                <b>${esc(m.name)}</b>
+                ${ended ? '<span class="mfr-ended-badge">협업종료</span>' : ''}
+                <span style="font-size:12px;color:#9ca3af">제품 ${m.productCount}개</span>
+              </div>
+              ${sub ? `<div style="font-size:12px;color:#6b7280;margin-top:2px">${sub}</div>` : ''}
             </div>
-            ${sub ? `<div style="font-size:12px;color:#6b7280;margin-top:2px">${sub}</div>` : ''}
+            ${ended
+              ? `<button class="btn btn-outline btn-sm" onclick="event.stopPropagation();reopenManufacturer(${m.id})">진행 복귀</button>`
+              : `<button class="btn btn-warn btn-sm" onclick="event.stopPropagation();endManufacturer(${m.id})">협업종료</button>`}
+            <!-- [요청] 제조사 삭제(연결 제품도 함께 삭제) — 확인 모달. 덜 눈에 띄게 흰 배경+빨간 테두리/글씨 -->
+            <button class="btn btn-sm" style="background:#fff;border:1px solid #ef4444;color:#ef4444" onclick="event.stopPropagation();openManufacturerDeleteModal(${m.id})">삭제</button>
           </div>
-          <button class="btn btn-outline btn-sm" onclick="openManufacturerForm(${m.id})">수정</button>
-          ${ended
-            ? `<button class="btn btn-outline btn-sm" onclick="reopenManufacturer(${m.id})">진행 복귀</button>`
-            : `<button class="btn btn-warn btn-sm" onclick="endManufacturer(${m.id})">협업종료</button>`}
-          <!-- [요청] 제조사 삭제(연결 제품도 함께 삭제) — 확인 모달. 덜 눈에 띄게 흰 배경+빨간 테두리/글씨 -->
-          <button class="btn btn-sm" style="background:#fff;border:1px solid #ef4444;color:#ef4444" onclick="openManufacturerDeleteModal(${m.id})">삭제</button>
+          ${detail}
         </div>`;
       }).join('');
+    }
+
+    // [요청] 제조사 목록 인라인 펼침 — 읽기 뷰
+    function manufacturerReadHtml(m) {
+      const row = (label, val) => `<div class="full"><div class="mfr-read-label">${label}</div><div class="mfr-read-value">${val ? esc(val) : '<span style=\"color:#c0c4cc\">—</span>'}</div></div>`;
+      const cell = (label, val) => `<div><div class="mfr-read-label">${label}</div><div class="mfr-read-value">${val ? esc(val) : '<span style=\"color:#c0c4cc\">—</span>'}</div></div>`;
+      return `
+        <div class="mfr-read-grid">
+          ${cell('담당자', m.contactPerson)}
+          ${cell('연락처', m.contact)}
+          ${cell('허들', m.hurdle)}
+          ${cell('일정 참고사항', m.schedule)}
+          ${row('제조사 메모', m.memo)}
+        </div>
+        <div style="display:flex;justify-content:flex-end;margin-top:12px">
+          <button class="btn btn-outline btn-sm" onclick="startInlineEditManufacturer(${m.id})">수정</button>
+        </div>`;
+    }
+
+    // [요청] 제조사 목록 인라인 펼침 — 편집 폼 (id는 인라인 전용 mfrInline*)
+    function manufacturerEditFormHtml(m) {
+      return `
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div class="form-group"><label><span style="color:#ef4444;margin-right:2px">*</span>제조사명</label><input id="mfrInlineName" type="text" value="${esc(m.name)}"></div>
+          <div class="form-group"><label>담당자</label><input id="mfrInlineContactPerson" type="text" value="${esc(m.contactPerson)}" placeholder="선택"></div>
+          <div class="form-group"><label>연락처</label><input id="mfrInlineContact" type="text" value="${esc(m.contact)}" placeholder="선택 (전화·이메일·카톡 등)"></div>
+          <div class="form-group"><label>허들</label><input id="mfrInlineHurdle" type="text" value="${esc(m.hurdle)}" placeholder="선택 (제품 기본값)"></div>
+          <div class="form-group"><label>일정 참고사항</label><input id="mfrInlineSchedule" type="text" value="${esc(m.schedule)}" placeholder="선택 (제품 기본값)"></div>
+        </div>
+        <div class="form-group"><label>제조사 메모</label><textarea id="mfrInlineMemo" rows="2" placeholder="선택">${esc(m.memo)}</textarea></div>
+        <div style="display:flex;gap:8px;justify-content:flex-end">
+          <button class="btn btn-outline btn-sm" onclick="cancelInlineEditManufacturer()">취소</button>
+          <button class="btn btn-primary btn-sm" onclick="saveManufacturerInline(${m.id})">저장</button>
+        </div>`;
+    }
+
+    // [요청] 제조사 목록 인라인 — 펼침/편집 상태
+    let expandedManufacturerId = null;
+    let editingInlineManufacturerId = null;
+    function toggleManufacturer(id) {
+      id = Number(id);
+      if (expandedManufacturerId === id) {
+        expandedManufacturerId = null;
+      } else {
+        expandedManufacturerId = id;
+      }
+      editingInlineManufacturerId = null; // 펼침 전환 시 항상 읽기 모드로
+      renderManufacturers();
+    }
+    function startInlineEditManufacturer(id) {
+      editingInlineManufacturerId = Number(id);
+      renderManufacturers();
+      setTimeout(() => document.getElementById('mfrInlineName')?.focus(), 0);
+    }
+    function cancelInlineEditManufacturer() {
+      editingInlineManufacturerId = null;
+      renderManufacturers();
+    }
+    async function saveManufacturerInline(id) {
+      const payload = {
+        name: document.getElementById('mfrInlineName').value.trim(),
+        contactPerson: document.getElementById('mfrInlineContactPerson').value.trim(),
+        contact: document.getElementById('mfrInlineContact').value.trim(),
+        hurdle: document.getElementById('mfrInlineHurdle').value.trim(),
+        schedule: document.getElementById('mfrInlineSchedule').value.trim(),
+        memo: document.getElementById('mfrInlineMemo').value.trim(),
+      };
+      if (!payload.name) { alert('제조사명은 필수입니다.'); return; }
+      let res;
+      try {
+        res = await fetch('/api/manufacturers/' + Number(id), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      } catch (e) { alert('저장 실패(네트워크): ' + e.message); return; }
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { alert(data.error || '저장 실패'); return; }
+      editingInlineManufacturerId = null;
+      expandedManufacturerId = Number(id); // 펼침 유지
+      await loadManufacturers();
+      renderManufacturers();
+      showToast('제조사 수정됨');
     }
 
     let editingManufacturerId = null;
