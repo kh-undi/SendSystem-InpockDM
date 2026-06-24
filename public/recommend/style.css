@@ -55,20 +55,14 @@ main {
 }
 @media (max-width: 480px) {
   .product-grid { grid-template-columns: 1fr; }
-  /* [요청] 모바일에서 모달이 화면을 꽉 채우지 않도록 너비 70%로 축소(가운데 정렬) */
-  .modal-content { width: 70%; margin: 24px auto; }
-  /* [요청] 모바일에선 좌우 이동 버튼을 사진이 아니라 화면(뷰포트) 세로 중앙에 고정 */
-  .modal-nav,
-  .modal-content > .modal-nav { position: fixed; top: 50%; transform: translateY(-50%); }
-  .modal-nav.prev { left: 12px; }
-  .modal-nav.next { right: 12px; }
-  .modal-nav:active,
-  .modal-content > .modal-nav:active { transform: translateY(-50%) scale(0.92); }
+  /* [요청] 모바일에서 모달이 화면을 꽉 채우지 않도록 — 좌우 여백 + 세로 중앙에 띄움(margin:auto는 내용 길 때 스크롤 안전) */
+  .modal { align-items: center; }
+  .modal-content { width: 88%; margin: auto; }
 }
 
 .product-card {
   background: white;
-  border: 1px solid #f3f4f6;
+  border: 2px solid #e5e7eb; /* [요청] 제품 카드 테두리 — 또렷한 연회색, 두께 2px */
   border-radius: 12px;
   overflow: hidden;
   cursor: pointer;
@@ -139,6 +133,8 @@ main {
   align-items: flex-start;
   justify-content: center;
   overflow-y: auto;
+  overscroll-behavior: contain; /* [요청-버그] 모달 스크롤이 끝에 닿아도 뒤 목록으로 전파 안 되게 */
+  -webkit-overflow-scrolling: touch;
 }
 .modal-backdrop {
   position: fixed;
@@ -173,10 +169,9 @@ main {
   box-shadow: 0 2px 8px rgba(0,0,0,0.1);
 }
 
-/* [요청] 추천 모달 제품 좌우 이동 버튼 — 사진 영역 기준 세로 중앙 (모바일 터치 친화 크기) */
-.modal-photo-wrap { position: relative; }
+/* [요청] 추천 모달 제품 좌우 이동 버튼 — 화면(뷰포트) 세로 정중앙에 고정(제품/스크롤 무관 항상 같은 자리) */
 .modal-nav {
-  position: absolute;
+  position: fixed;
   top: 50%;
   transform: translateY(-50%);
   z-index: 2;
@@ -185,7 +180,8 @@ main {
   width: 48px;
   height: 48px;
   border-radius: 50%;
-  font-size: 22px;
+  font-size: 30px;          /* [요청] 버튼 크기는 유지, 안의 화살표 글리프만 키움 */
+  font-weight: 700;
   line-height: 1;
   cursor: pointer;
   display: flex;
@@ -197,9 +193,6 @@ main {
 .modal-nav.prev { left: 12px; }
 .modal-nav.next { right: 12px; }
 .modal-nav:active { background: #fff; transform: translateY(-50%) scale(0.92); }
-/* 사진 없는 제품 폴백 — 모달 콘텐츠 상단 기준 */
-.modal-content > .modal-nav { top: 16px; transform: none; }
-.modal-content > .modal-nav:active { transform: scale(0.92); }
 
 .modal-photo {
   width: 100%;

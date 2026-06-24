@@ -132,11 +132,7 @@
     let html = '';
     html += `<button class="modal-close" onclick="closeModal()" aria-label="닫기">✕</button>`;
     if (photo) {
-      // 사진을 감싸고 그 안에 nav 버튼을 둬 사진 영역 기준 세로 중앙 정렬
-      html += `<div class="modal-photo-wrap"><img class="modal-photo" src="${esc(photo)}" alt="${esc(name)}">${prevBtn}${nextBtn}</div>`;
-    } else {
-      // 사진 없는 폴백 — 모달 콘텐츠 상단 기준
-      html += prevBtn + nextBtn;
+      html += `<img class="modal-photo" src="${esc(photo)}" alt="${esc(name)}">`;
     }
     html += `<div class="modal-body">`;
     html += `<div class="modal-check">✓</div>`;
@@ -176,16 +172,41 @@
     }
 
     html += `</div>`;
+    // 좌우 이동 버튼은 모달 카드 직속 자식 → 카드(팝업) 세로 중앙에 위치
+    html += prevBtn + nextBtn;
     $modalContent.innerHTML = html;
     $modal.style.display = 'flex';
     $modal.setAttribute('aria-hidden', 'false');
+    $modal.scrollTop = 0; // [요청] 열 때/제품 넘길 때 상세 내용을 항상 상단부터 보이게(이전 스크롤 위치 리셋)
+    // [요청-버그] prev/next 재호출 시 중복 잠금 방지 — 처음 열 때만 배경 스크롤 잠금
+    if (!document.body.classList.contains('modal-open')) lockScroll();
+  }
+
+  // [요청-버그] 모바일 배경 스크롤 잠금 — body를 position:fixed로 고정해 뒤 목록이 안 움직이게(스크롤 위치 저장/복원)
+  let savedScrollY = 0;
+  function lockScroll() {
+    savedScrollY = window.scrollY || window.pageYOffset || 0;
+    document.body.style.position = 'fixed';
+    document.body.style.top = `-${savedScrollY}px`;
+    document.body.style.left = '0';
+    document.body.style.right = '0';
+    document.body.style.width = '100%';
     document.body.classList.add('modal-open');
+  }
+  function unlockScroll() {
+    document.body.classList.remove('modal-open');
+    document.body.style.position = '';
+    document.body.style.top = '';
+    document.body.style.left = '';
+    document.body.style.right = '';
+    document.body.style.width = '';
+    window.scrollTo(0, savedScrollY);
   }
 
   window.closeModal = function () {
     $modal.style.display = 'none';
     $modal.setAttribute('aria-hidden', 'true');
-    document.body.classList.remove('modal-open');
+    unlockScroll(); // [요청-버그] 배경 스크롤 잠금 해제 + 위치 복원
     currentIdx = -1; // [요청] 닫을 때 인덱스 리셋
   };
 
@@ -204,6 +225,25 @@
     else if (e.key === 'ArrowLeft') window.prevProduct();   // [요청] ← 이전 제품
     else if (e.key === 'ArrowRight') window.nextProduct();  // [요청] → 다음 제품
   });
+
+  // [요청] 모바일 좌우 스와이프로 이전/다음 제품 이동 — 세로 스크롤과 구분되게 가로 우세할 때만
+  let touchStartX = 0, touchStartY = 0;
+  $modalContent.addEventListener('touchstart', (e) => {
+    const t = e.changedTouches[0];
+    touchStartX = t.clientX;
+    touchStartY = t.clientY;
+  }, { passive: true });
+  $modalContent.addEventListener('touchend', (e) => {
+    if ($modal.style.display !== 'flex') return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - touchStartX;
+    const dy = t.clientY - touchStartY;
+    // 가로 이동이 충분히 크고(50px↑) 세로보다 우세할 때만 → 세로 스크롤 오작동 방지
+    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+      if (dx < 0) window.nextProduct();  // 왼쪽으로 밀기 → 다음 제품
+      else window.prevProduct();         // 오른쪽으로 밀기 → 이전 제품
+    }
+  }, { passive: true });
 
   loadCatalog();
 })();
