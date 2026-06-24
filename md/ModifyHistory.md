@@ -38,6 +38,11 @@ N명에게서 답장 (M명 거절)
 [ 실행계획 ]
 
 [ 작업완료 ]
+## 추천 카탈로그 모달 — 제품 좌우 이동 버튼 추가 (26.06.24)
+공개 추천 페이지(`/recommend/?c=<code>`) 제품 상세 모달에 이전/다음 제품 이동 버튼(‹ ›) 추가. 모바일 터치 우선. UI 전용 변경([public/recommend/catalog.js](public/recommend/catalog.js) + [public/recommend/style.css](public/recommend/style.css)) — 백엔드/RPC/데이터 무영향.
+- **catalog.js**: 모듈 변수 `currentIdx`로 열린 제품 인덱스 추적(`openModal`에서 저장, `closeModal`에서 -1 리셋). `openModal()`이 전체 제품 수 기준으로 좌우 버튼 HTML 생성 — `idx>0`일 때만 ‹(prev), `idx<total-1`일 때만 ›(next) → 첫 제품은 next만, 마지막은 prev만. 사진 있으면 `.modal-photo-wrap`으로 감싸 그 안에 버튼(사진 영역 세로 중앙 고정 — 내용 긴 제품 스크롤 시 버튼 사라짐 회피), 없으면 `.modal-content` 상단 폴백. `window.prevProduct`/`window.nextProduct`(경계 가드 포함)가 `openModal(currentIdx∓1)` 재호출. 기존 `keydown` 리스너에 ←/→ 추가(모달 열림 시만).
+- **style.css**: `.modal-nav` 신설 — `.modal-close` 톤 일치하되 모바일 터치 위해 48px 원형. `top:50%; translateY(-50%)`, prev `left:12px`/next `right:12px`, `:active` 시 살짝 축소 피드백. `.modal-photo-wrap{position:relative}`(버튼 기준). 사진 없는 폴백은 `.modal-content > .modal-nav`로 상단 고정.
+- 검증: `node --check` 통과. 실동작은 로컬 `?c=` 페이지에서 수동 확인 필요.
 ## '유틸리티' 탭 → '메모'로 변경 + 우측 끝(주황 영역)으로 분리 (26.06.19)
 '유틸리티' 탭(자주 사용하는 문구, `data-panel="phrases"`)은 직원용이라 성질이 달라 탭명을 '메모'로 바꾸고 헤더 우측 끝에 단독 분리. UI 전용 변경([public/index.html](public/index.html)) — 백엔드/repo 무영향, 패널 전환은 `data-panel` 기반이라 마크업 순서 이동 무관.
 - **탭 마크업 재배치**: '메모' 탭(`data-panel="phrases"`) 라벨 `유틸리티`→`메모`로 변경 후, 마크업 위치를 '📊 인스타분석' 탭 **뒤(맨 마지막)**로 이동. 클래스 `tab`→`tab tab-right`.

@@ -16,6 +16,7 @@
   const $modalContent = document.getElementById('modalContent');
 
   let catalogData = null;
+  let currentIdx = -1; // [요청] 모달에 열린 제품 인덱스 — 좌우 이동 버튼/키보드용
 
   function getCodeFromUrl() {
     const params = new URLSearchParams(location.search);
@@ -116,14 +117,26 @@
     const p = catalogData?.products?.[idx];
     if (!p) return;
 
+    currentIdx = idx; // [요청] 현재 인덱스 저장 — prev/next 재호출 기준
+    const total = Array.isArray(catalogData?.products) ? catalogData.products.length : 0;
     const photo = firstPhoto(p);
     const name = p.productName || p.name || '';
     const hooking = Array.isArray(p.hookingPhrases) ? p.hookingPhrases : []; // 미사용 — 데이터 없음 (RPC 미포함)
 
+    // [요청] 좌우 이동 버튼 — 첫 제품은 ▶만, 마지막은 ◀만
+    const prevBtn = idx > 0
+      ? `<button class="modal-nav prev" onclick="prevProduct()" aria-label="이전 제품">‹</button>` : '';
+    const nextBtn = idx < total - 1
+      ? `<button class="modal-nav next" onclick="nextProduct()" aria-label="다음 제품">›</button>` : '';
+
     let html = '';
     html += `<button class="modal-close" onclick="closeModal()" aria-label="닫기">✕</button>`;
     if (photo) {
-      html += `<img class="modal-photo" src="${esc(photo)}" alt="${esc(name)}">`;
+      // 사진을 감싸고 그 안에 nav 버튼을 둬 사진 영역 기준 세로 중앙 정렬
+      html += `<div class="modal-photo-wrap"><img class="modal-photo" src="${esc(photo)}" alt="${esc(name)}">${prevBtn}${nextBtn}</div>`;
+    } else {
+      // 사진 없는 폴백 — 모달 콘텐츠 상단 기준
+      html += prevBtn + nextBtn;
     }
     html += `<div class="modal-body">`;
     html += `<div class="modal-check">✓</div>`;
@@ -173,12 +186,23 @@
     $modal.style.display = 'none';
     $modal.setAttribute('aria-hidden', 'true');
     document.body.classList.remove('modal-open');
+    currentIdx = -1; // [요청] 닫을 때 인덱스 리셋
+  };
+
+  // [요청] 이전/다음 제품으로 이동 — 모달 통째로 다시 그림(기존 패턴), 경계 가드
+  window.prevProduct = function () {
+    if (currentIdx > 0) openModal(currentIdx - 1);
+  };
+  window.nextProduct = function () {
+    const total = Array.isArray(catalogData?.products) ? catalogData.products.length : 0;
+    if (currentIdx >= 0 && currentIdx < total - 1) openModal(currentIdx + 1);
   };
 
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && $modal.style.display === 'flex') {
-      window.closeModal();
-    }
+    if ($modal.style.display !== 'flex') return;
+    if (e.key === 'Escape') window.closeModal();
+    else if (e.key === 'ArrowLeft') window.prevProduct();   // [요청] ← 이전 제품
+    else if (e.key === 'ArrowRight') window.nextProduct();  // [요청] → 다음 제품
   });
 
   loadCatalog();
