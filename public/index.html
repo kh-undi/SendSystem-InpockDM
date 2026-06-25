@@ -1222,35 +1222,43 @@
                 <!-- [요청] 필수 표시 -->
                 <label><span style="color:#ef4444;margin-right:2px">*</span>관리명 (인플루언서 목록에서 매칭용)</label>
                 <input type="text" value="${esc(p.name)}" onchange="products[${i}].name=this.value;updateProductHeader(${i})" onclick="event.stopPropagation()">
+              </div><br>
+              <div class="form-group">
+                <label><span style="color:#ef4444;margin-right:2px">*</span>제품명</label>
+                <input type="text" value="${esc(p.productName)}" onchange="products[${i}].productName=this.value;updateProductHeader(${i})" onclick="event.stopPropagation()">
               </div>
               <div class="form-group">
                 <label>메일 제목</label>
                 <input type="text" value="${esc(p.mailSubject || '')}" onchange="products[${i}].mailSubject=this.value" onclick="event.stopPropagation()" placeholder="비우면 '[언엑스 공동구매] ${esc(p.name)} 공동구매 제안 건'으로 발송">
               </div>
-              <hr style="grid-column:1/-1;border:none;border-top:1px solid #e5e7eb;width:50%;margin:3px auto">
-              <!-- [요청] 제조사 관리 — 브랜드명 직접입력 → 제조사 검색 콤보박스(선택 시 브랜드명 자동) -->
-              <div class="form-group">
-                <label><span style="color:#ef4444;margin-right:2px">*</span>제조사</label>
-                <input type="text" placeholder="제조사 검색..." oninput="filterManufacturerSelect(${i}, this.value)" onclick="event.stopPropagation()" style="margin-bottom:6px">
-                <select id="mfrSelect-${i}" onchange="selectManufacturer(${i}, this.value)" onclick="event.stopPropagation()">
-                  ${manufacturerOptionsHtml(p.manufacturerId)}
-                </select>
-                <div style="font-size:12px;color:#9ca3af;margin-top:4px">브랜드명: ${esc(p.brandName) || '(제조사 선택 시 자동 채움)'}</div>
-              </div>
-              <div class="form-group">
-                <label><span style="color:#ef4444;margin-right:2px">*</span>제품명</label>
-                <input type="text" value="${esc(p.productName)}" onchange="products[${i}].productName=this.value;updateProductHeader(${i})" onclick="event.stopPropagation()">
-              </div>
-              <!-- [요청] 제품 상세에 제조사 메모 표시 — 연결 제조사의 memo를 읽기전용으로(편집은 '제조사 목록' 탭). 제조사-제품명-제조사 메모-카테고리-캠페인 유형 순. -->
-              <div class="form-group" style="grid-column:1/-1">
-                <label>제조사 메모 <span style="font-size:12px;color:#9ca3af">(제조사 목록에서 편집)</span></label>
-                ${(() => {
-                  const mm = manufacturers.find(x => x.id === p.manufacturerId);
-                  const memo = mm && mm.memo ? mm.memo : '';
-                  // [요청] 제조사 메모 textarea 자동 높이 — 저장된 메모 줄 수에 맞춰 rows(최소 2 ~ 최대 12)
-                  const rows = Math.min(Math.max(memo.split('\n').length, 2), 12);
-                  return `<textarea rows="${rows}" readonly onclick="event.stopPropagation()" style="background:#f9fafb;color:#6b7280;cursor:default" placeholder="${mm ? '제조사 메모 없음' : '제조사 선택 시 표시'}">${esc(memo)}</textarea>`;
-                })()}
+              <!-- [요청] 제조사 영역을 박스로 묶어 시각적으로 구분 (배경색 + 테두리) -->
+              <div style="grid-column:1/-1;background:#f0f7ff;border:1px solid #dbeafe;border-radius:8px;padding:14px 16px;margin:4px 0">
+                <div style="font-size:13px;font-weight:700;color:#2563eb;margin-bottom:10px">제조사 정보</div>
+                <!-- [요청] 제조사 관리 — 브랜드명 직접입력 → 제조사 검색 콤보박스(선택 시 브랜드명 자동) -->
+                <!-- [요청] 제조사 검색 input은 왼쪽, selectbox+브랜드명은 오른쪽 여백으로 이동 -->
+                <div class="form-group">
+                  <label><span style="color:#ef4444;margin-right:2px">*</span>제조사</label>
+                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start">
+                    <input type="text" placeholder="제조사 검색..." oninput="filterManufacturerSelect(${i}, this.value)" onclick="event.stopPropagation()">
+                    <div>
+                      <select id="mfrSelect-${i}" onchange="selectManufacturer(${i}, this.value)" onclick="event.stopPropagation()">
+                        ${manufacturerOptionsHtml(p.manufacturerId)}
+                      </select>
+                      <div style="font-size:12px;color:#9ca3af;margin-top:4px">브랜드명: ${esc(p.brandName) || '(제조사 선택 시 자동 채움)'}</div>
+                    </div>
+                  </div>
+                </div>
+                <!-- [요청] 제품 상세에 제조사 메모 표시 — 연결 제조사의 memo를 읽기전용으로(편집은 '제조사 목록' 탭). 제조사-제품명-제조사 메모-카테고리-캠페인 유형 순. -->
+                <div class="form-group" style="margin-bottom:0">
+                  <label>제조사 메모 <span style="font-size:12px;color:#9ca3af">(제조사 목록에서 편집)</span></label>
+                  ${(() => {
+                    const mm = manufacturers.find(x => x.id === p.manufacturerId);
+                    const memo = mm && mm.memo ? mm.memo : '';
+                    // [요청] 제조사 메모 textarea 자동 높이 — 저장된 메모 줄 수에 맞춰 rows(최소 2 ~ 최대 12)
+                    const rows = Math.min(Math.max(memo.split('\n').length, 2), 12);
+                    return `<textarea rows="${rows}" readonly onclick="event.stopPropagation()" style="background:#fff;color:#6b7280;cursor:default" placeholder="${mm ? '제조사 메모 없음' : '제조사 선택 시 표시'}">${esc(memo)}</textarea>`;
+                  })()}
+                </div>
               </div>
               <div class="form-group">
                 <label><span style="color:#ef4444;margin-right:2px">*</span>카테고리</label>
